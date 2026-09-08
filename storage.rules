@@ -1,0 +1,65 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper function to check for admin roles
+    // FIXME: This function is invalid because Storage Rules cannot read from the Realtime Database.
+    // The `get()` function only works for Firestore.
+    // A long-term solution should use custom claims for role management.
+    // function isAdmin(userId) {
+    //   let userRole = get(/databases/(default)/documents/users/$(userId)).data.role;
+    //   return userRole == 'Administrator' || userRole == 'Super-Administrator';
+    // }
+
+    // By default, deny all reads and writes.
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Artworks are public.
+    match /artworks/{allPaths=**} {
+      allow read;
+    }
+    
+    // Products are public.
+    match /products/{allPaths=**} {
+      allow read;
+    }
+
+    // Profiles: public read for authenticated users, write is restricted to owner.
+    match /profiles/{userId}/{allPaths=**} {
+      // Create/Update: Only the user can do this.
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      // Delete: The user themselves can delete. Admin deletion is temporarily disabled.
+      allow delete: if request.auth != null && request.auth.uid == userId; // || isAdmin(request.auth.uid));
+    }
+
+    // Generated Content: Allow server-side agent to write avatars without user auth.
+    // WARNING: This rule is temporarily permissive for development.
+    // A more secure long-term solution would use the Firebase Admin SDK.
+    match /generated-content/{userId}/{allPaths=**} {
+      allow create, update; // Temporarily allow writes for the server-side agent
+      allow delete: if request.auth != null && request.auth.uid == userId; // || isAdmin(request.auth.uid));
+    }
+
+    // Artworks: users can write to their own directory. Admins can delete.
+    match /artworks/{userId}/{allPaths=**} {
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId; // || isAdmin(request.auth.uid));
+    }
+
+    // Products: users can write to their own directory. Admins can delete.
+    match /products/{userId}/{allPaths=**} {
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId; // || isAdmin(request.auth.uid));
+    }
+
+    // Facial Scans: only the user can write. No admin access.
+    match /facial_scans/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

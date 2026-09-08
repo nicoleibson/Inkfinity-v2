@@ -1,0 +1,11 @@
+{
+  "name": "Inkfinity",
+  "description": "Decentralized ecosystem and portfolio platform for tattoo artists, studios, and clients.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

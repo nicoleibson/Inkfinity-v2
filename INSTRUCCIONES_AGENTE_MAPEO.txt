@@ -1,0 +1,56 @@
+================================================================
+Instrucciones para Generar el Mapa de Código del Proyecto (code_map.json)
+================================================================
+
+Este documento describe el procedimiento para generar o actualizar el archivo `src/ai/code_map.json`,
+que funciona como la "memoria a largo plazo" para los agentes de IA que trabajan en este proyecto.
+
+----------------
+Pre-requisitos:
+----------------
+Asegúrate de que los siguientes archivos, creados previamente, existan en tu proyecto:
+- src/ai/agents/codeMapperAgent.ts
+- src/ai/flows/mappingFlow.ts
+
+----------------
+Procedimiento:
+----------------
+
+Paso 1: Instalar dependencias necesarias
+-----------------------------------------
+Si es la primera vez que ejecutas este proceso, asegúrate de que la librería `glob` esté instalada.
+Abre una terminal en la raíz del proyecto y ejecuta:
+
+npm install glob @types/glob
+
+
+Paso 2: Iniciar la Interfaz de Desarrollo de Genkit
+---------------------------------------------------
+Genkit proporciona una interfaz web para ejecutar y depurar flujos de IA. Para iniciarla, ejecuta el siguiente comando en tu terminal:
+
+npx genkit start
+
+
+Paso 3: Ejecutar el Flujo de Mapeo de Código
+--------------------------------------------
+1. Una vez que el servidor de Genkit esté en funcionamiento, abre tu navegador web y dirígete a:
+   http://localhost:4000
+
+2. En la interfaz de Genkit, verás una lista de los flujos de IA disponibles. Busca y haz clic en `mapCodebaseFlow`.
+
+3. El flujo te pedirá un parámetro de entrada (Input). Debes proporcionar la RUTA ABSOLUTA a la carpeta raíz de tu proyecto. Por ejemplo:
+   "/home/usuario/proyectos/inkfinity.site-main"
+
+4. Haz clic en el botón "Run" para iniciar el proceso.
+
+
+Paso 4: Verificar el Resultado
+------------------------------
+El flujo comenzará a procesar todos los archivos de código fuente (.ts, .tsx) del proyecto. Puedes ver el progreso en la terminal donde ejecutaste `npx genkit start`.
+
+Este proceso puede tardar varios minutos.
+
+Al finalizar, se creará (o actualizará) un archivo en la siguiente ruta:
+`src/ai/code_map.json`
+
+Este archivo contiene un análisis estructurado de todo tu código, listo para ser utilizado por otros agentes de IA para entender el proyecto sin necesidad de leer todos los archivos cada vez.

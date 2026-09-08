@@ -1,0 +1,256 @@
+# Inkfinity - Arquitectura y Blueprint del Proyecto
+
+Este documento es el plano maestro de la aplicación Inkfinity. Describe la estructura, el propósito de cada componente, los flujos de datos, la lógica de negocio y las interacciones entre las distintas partes de la plataforma.
+
+---
+## 1. Visión General y Pila Tecnológica
+
+**Propósito:** Inkfinity es un mercado y plataforma social para la industria del tatuaje, que conecta a clientes, artistas, estudios y proveedores.
+
+**Pila Tecnológica:**
+- **Framework:** Next.js (con App Router)
+- **Lenguaje:** TypeScript
+- **UI:** React, ShadCN UI, Tailwind CSS
+- **Inteligencia Artificial:** Google AI & Genkit
+- **Backend & Base de Datos:** Firebase (Authentication, Realtime Database, Storage, Functions)
+- **Web3:** Ethers.js para la interacción con billeteras de criptomonedas.
+
+---
+## 2. Estructura del Directorio Raíz
+
+- **`src/`**: Contiene todo el código fuente de la aplicación. Es el directorio principal de desarrollo.
+- **`docs/`**: Documentación de alto nivel sobre seguridad, configuración, despliegue e integraciones (`DEPLOYMENT.md`, `SECURITY.md`, `SETUP.md`, `TROUBLESHOOTING.md`, `ADVANCED_INTEGRATIONS.md`, `blueprint.md`).
+- **`public/`**: Archivos estáticos accesibles públicamente.
+  - **`public/models/`**: Modelos de visión por computador usados en el navegador: `face-detector.tflite` (MediaPipe FaceDetector), `face_landmarker.task` (FaceLandmarker), `mediapipe/` (WASM) y `face-api/` (tiny_face_detector, face_landmark_68, face_recognition).
+- **`inkfinity-ml/`**: Funciones de Cloud Functions (Firebase Functions v2 + `firebase-admin` con ADC) para automatización de admin.
+- **`apphosting.yaml`**: Configuración del backend de Firebase App Hosting (instancias + secret `GEMINI_API_KEY`).
+- **`firebase.json`**: Configuración de Firebase (reglas de RTDB/Storage, emuladores, framework backend).
+- **`database.rules.json`**: **[CRÍTICO]** Define las reglas de seguridad de la Realtime Database. Es el núcleo de la autorización y el control de acceso a los datos.
+- **`storage.rules`**: Define las reglas de seguridad para Firebase Storage.
+- **`next.config.js`**: Configuración ÚNICA de Next.js: `output: standalone`, imágenes remotas de Firebase Storage/placehold, `serverExternalPackages` y `serverActions.allowedOrigins` (dominios de producción para las server actions).
+- **`tailwind.config.ts`**: Configuración de Tailwind CSS para el diseño y la personalización de estilos.
+- **`components.json`**: Configuración específica de la CLI de ShadCN UI para la gestión de componentes.
+- **`tsconfig.json`**: Configuración del compilador de TypeScript.
+- **`package.json`**: Lista de dependencias del proyecto y scripts de ejecución (dev, build, etc.).
+
+---
+## 3. Arquitectura del Directorio `src/`
+
+### `src/app/` - Enrutamiento y Páginas (App Router)
+El corazón de la navegación. Cada carpeta define un segmento de la URL.
+
+- **`/layout.tsx`**: Layout raíz. Aplica el contexto global (tema, billetera), la cabecera y el pie de página a toda la aplicación.
+- **`/page.tsx`**: Página de inicio (Home). Muestra galerías de arte, artistas destacados y una barra de búsqueda.
+- **`(auth)/`**: Grupo de rutas para la autenticación.
+  - **`login/`**: Página de inicio de sesión.
+  - **`signup/`**: Página de registro multi-paso.
+- **`[username]/`**: Ruta dinámica para el perfil de un usuario. Muestra su biografía, obras, seguidores, etc.
+- **`admin/`**: Panel de administración (protegido por rol).
+  - **`users/`**: Gestión de usuarios.
+  - **`moderation/`**: Cola de moderación de contenido.
+- **`artwork/[id]/`**: Ruta dinámica para la página de detalle de una obra de arte.
+- **`chat/`**: Interfaz de mensajería.
+  - **`[id]/`**: Conversación de chat específica.
+- **`dashboard/`**: Panel de control del usuario (protegido por autenticación).
+  - **`bookings/`**: Gestión de reservas (citas).
+  - **`studio/`**: Gestión de artistas residentes (para rol de 'Studio').
+  - **`products/`**: Gestión de productos (para rol de 'Supply Store').
+- **`settings/`**: Página de configuración del perfil del usuario (incluye registro/verificación facial 2FA).
+- **`verify-face/`**: Página de verificación facial 2FA post-login.
+  - **`email-link/`**: Página que completa el fallback por email link (`signInWithEmailLink`) y redirige a `/`. El email viaja en la URL del link para soportar dispositivos cruzados.
+- **`upload/`**: Página para subir nuevas obras de arte.
+
+### `src/components/` - Componentes de React
+Organizados por funcionalidad para máxima reutilización.
+
+- **`layout/`**: Componentes estructurales (Header, Footer, DynamicTheme).
+- **`components/auth/`**: Formularios y componentes para login, registro y verificación facial (`face-verifier.tsx`).
+- **`home/`**: Componentes específicos de la página de inicio (FeaturedArtists, FeaturedArtworks).
+- **`profile/`**: Componentes para construir la página de perfil del usuario.
+- **`artwork/`**: Componentes para mostrar obras (ArtworkCard, ArtworkActions).
+- **`admin/`**: Componentes para el panel de administración (UserManagementTable, ModerationQueue).
+- **`chat/`**: Bloques de construcción para la interfaz de chat (ChatList, ChatMessages).
+- **`dashboard/`**: Widgets y componentes para el panel de usuario (DashboardStats, RecentActivity).
+- **`bookings/`**: UI para la gestión de reservas (BookingList, BookingDialog).
+- **`products/`**: Componentes para listar y gestionar productos (ProductCard, ProductManagement).
+- **`ui/`**: Componentes de UI genéricos de ShadCN (Button, Card, Input, etc.). Son los "átomos" del diseño.
+
+### `src/ai/` - Lógica de Inteligencia Artificial (Genkit)
+Encapsula toda la funcionalidad de IA.
+
+- **`agents/`**: Define los "agentes" de Genkit. Cada agente es un flujo (`defineFlow`) que realiza una tarea específica, a menudo utilizando un `prompt` o una `tool`.
+  - `artwork-details-generation-agent.ts`: Genera título, descripción y etiquetas para una obra de arte.
+  - `image-moderation-agent.ts`: Escanea imágenes en busca de contenido inapropiado.
+  - `onboarding-assistant-agent.ts`: Crea una biografía y un avatar para nuevos usuarios.
+  - `verify-face-agent.ts`: Compara la imagen facial registrada **+ 3 capturas en vivo cronológicas** y devuelve `isMatch` + `confidence` (0-1). Solo se acepta con `confidence ≥ 0.8`.
+  - `watermark-image-agent.ts`: Aplica una marca de agua a las imágenes.
+  - `verify-nft-ownership-agent.ts`: (Simulado) Verifica la propiedad de un NFT en la blockchain.
+  - `geocode-address-agent.ts`: Convierte direcciones en coordenadas (Google Maps).
+- **`flows/`**: Exporta funciones asíncronas simples que envuelven a los agentes. El resto de la aplicación interactúa con estos flujos, no directamente con los agentes, para mantener el código limpio.
+- **`schemas/`**: Define los esquemas de entrada y salida (`zod`) para cada flujo de IA. Esto asegura que los datos enviados y recibidos del modelo de lenguaje sean consistentes y tipados.
+- **`genkit.ts`**: Punto de entrada para la configuración de Genkit. Inicializa los plugins (Firebase, Google AI).
+
+### `src/lib/` - Utilidades y Lógica Central
+
+- **`firebase-config.ts`**: **[CRÍTICO]** Inicializa y exporta las instancias de los servicios de Firebase (Auth, Database). Es el punto de conexión con el backend.
+- **`utils.ts`**: Funciones de utilidad genéricas (ej. `cn` para fusionar clases de Tailwind).
+- **`nft-sync.ts`**: Lógica del lado del servidor para la tarea programada de verificar la propiedad de NFTs.
+- **`client/`**: Utilidades de visión por computador y cámara que corren SOLO en el navegador (evitan bundling de WASM/ML en el servidor):
+  - **`camera.ts`**: Acceso a cámara con diagnóstico accionable (`requestCamera`): distingue contexto no-HTTPS, sin dispositivo, permiso denegado y cámara en uso; primero pide `getUserMedia` (iOS Safari devuelve lista vacía de dispositivos hasta conceder permiso) y reintenta con constraints mínimas ante `OverconstrainedError`.
+  - **`face-capture.ts`**: Detección facial (MediaPipe `FaceDetector`, GPU→CPU), compresión JPEG (480px/0.72) y secuencia de **liveness** `captureLiveSequence` (FaceLandmarker a 256px, parpadeo ≥0.6 y movimiento de cabeza ≥4°).
+  - **`face-recognition.ts`**: Embeddings faciales de face-api.js (128-D; import dinámico para no romper SSR) con distancia euclidiana < 0.6 = match.
+- **`face-lock.ts`**: Rate limiting escalado por intentos fallidos en `users/{uid}/facialAttempts` (3→30s, 5→5min, 7→30min); `runTransaction` para consistencia.
+- **`email-fallback.ts`**: Fallback de 2FA por email link (único canal de Firebase Auth): `sendSignInLinkToEmail` con el email incrustado en la URL (funciona entre dispositivos).
+
+### `src/hooks/` - Hooks de React Personalizados
+
+- **`useUserSession.tsx`**: Gestiona la sesión del usuario, detecta múltiples sesiones y maneja la lógica de redirección basada en el estado del usuario (ej. 'pending_payment').
+- **`usePlatformSettings.ts`**: Obtiene la configuración global de la plataforma (ej. red de blockchain, tarifas) desde Firebase.
+- **`useToast.ts`**: Hook para mostrar notificaciones "toast" en toda la aplicación.
+
+### `src/context/` - Proveedores de Contexto de React
+
+- **`app-providers.tsx`**: Componente que envuelve a todos los demás proveedores.
+- **`appkit.tsx`**: Inicializa Reown AppKit (WalletConnect) si existe `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (adaptador ethers, redes Polygon/Amoy).
+- **`theme-provider.tsx`**: Gestiona el cambio entre tema claro y oscuro usando `next-themes`.
+- **`wallet-provider.tsx`**: Maneja la conexión/desconexión de billetera. Con AppKit activo sincroniza sesión vía el hook puente (`AppKitBridge`); sin Project ID usa el flujo legacy de extensiones (`window.ethereum`). Comparte la verificación de duplicados + guardado en RTDB.
+
+### `src/types/` - Definiciones de Tipos de TypeScript
+Define la forma de los datos en toda la aplicación. Esencial para la seguridad de tipos y la predictibilidad.
+
+- **`user.ts`**: Define la estructura del objeto `UserProfile`, `Notification`, etc. Los campos `facialScanUrl`, `facialDescriptor` (embedding 128-D) y `facialAttempts` (`{ failed, lockedUntil }`) respaldan la verificación facial 2FA.
+- **`artwork.ts`**: Define la estructura del objeto `Artwork`.
+- **`booking.ts`**: Define la estructura del objeto `Booking`.
+- ...y así sucesivamente para cada entidad de datos principal.
+
+---
+## 4. Roles de Usuario y Lógica de Negocio
+
+- **`Client` (Cliente):**
+  - Puede buscar y ver perfiles y obras de arte.
+  - Puede seguir a artistas y estudios.
+  - Puede reservar citas con artistas/estudios, pagar depósitos y dejar reseñas.
+  - Puede chatear con otros usuarios.
+  - Puede solicitar una actualización al rol de "Tattoo Artist".
+
+- **`Tattoo Artist` (Artista del Tatuaje):**
+  - Tiene un perfil público donde puede mostrar su portafolio.
+  - Sube obras de arte con ayuda de la IA para generar detalles y aplicar marcas de agua.
+  - Gestiona su disponibilidad y acepta/rechaza solicitudes de reserva.
+  - Puede listar obras como activos digitales (NFTs) para la venta.
+  - Puede ser invitado y unirse a un "Studio".
+
+- **`Studio` (Estudio):**
+  - Actúa como un perfil de "grupo".
+  - Puede invitar a artistas a unirse como "artistas residentes".
+  - Las obras de los artistas residentes pueden aparecer en el perfil del estudio.
+  - Gestiona las reservas para todo el estudio.
+
+- **`Supply Store` (Tienda de Suministros):**
+  - Tiene un perfil para anunciar productos.
+  - Puede añadir productos con nombre, descripción, imagen y un enlace externo a su propia tienda. No gestiona ventas directas en la plataforma.
+
+- **`Administrator` (Administrador):**
+  - Accede a un panel de administración limitado.
+  - Puede ver y editar los roles y el estado de los usuarios (excepto otros administradores).
+  - Puede ver su propio código de referido y los usuarios que lo han usado.
+
+- **`Super-Administrator` (Super-Administrador):**
+  - Acceso completo al panel de administración.
+  - Puede cambiar roles y estados de todos los usuarios.
+  - Gestiona la configuración global de la plataforma (tarifas, red de blockchain, tema visual).
+  - Accede a la cola de moderación para aprobar/rechazar la eliminación de contenido.
+  - Puede sincronizar la base de datos con los usuarios de autenticación.
+  - Puede generar y editar códigos de referido para los administradores.
+
+---
+## 5. Flujos de Trabajo Críticos
+
+### Flujo 1: Registro de Usuario (Signup)
+
+1.  **Paso 1: Credenciales (`SignupForm`)**
+    - El usuario introduce email y contraseña y acepta los términos.
+    - Se llama a `createUserWithEmailAndPassword` de Firebase Auth.
+    - Si tiene éxito, se llama a `sendEmailVerification`.
+    - El estado del formulario avanza al Paso 2.
+
+2.  **Paso 2: Verificación de Email**
+    - El `SignupForm` inicia un sondeo (`setInterval`) que recarga el estado del usuario de Firebase cada pocos segundos (`reload(currentUser)`).
+    - El usuario hace clic en el enlace de su correo. La propiedad `emailVerified` de Firebase Auth cambia a `true`.
+    - El sondeo detecta el cambio y avanza automáticamente el estado del formulario al Paso 3.
+
+3.  **Paso 3: Detalles del Perfil**
+    - El usuario introduce nombre, apellido y selecciona su rol.
+    - Al hacer clic en "Generate Profile with AI", se crea un registro inicial en la Realtime Database (`/users/{uid}`) con estado "onboarding incomplete".
+    - Se llama al flujo de IA `generateOnboardingContent` (`onboarding-assistant-agent.ts`) con los datos del usuario.
+
+4.  **Paso 4: Personalización con IA**
+    - El flujo de IA devuelve una biografía y un avatar generado por IA (data URI).
+    - El `SignupForm` muestra estos resultados, permitiendo al usuario editar la biografía y regenerar el contenido si lo desea.
+
+5.  **Paso 5: Finalización**
+    - Al hacer clic en "Complete Signup", se actualiza el registro del usuario en la base de datos con la biografía, el avatar (como data URI) y se marca `onboardingComplete` como `true`.
+    - Dependiendo del rol, el estado del usuario puede ser `active` (Cliente, Artista) o `pending_payment` (Studio, Supply Store).
+    - Se muestra un mensaje de éxito y se redirige al login o a la página de pago.
+
+### Flujo 2: Subida de Obra de Arte (Upload)
+
+1.  **Selección y Recorte (`UploadForm`)**
+    - El usuario (rol Artista) selecciona un archivo de imagen.
+    - La imagen se muestra en el componente `ReactCrop`. El usuario ajusta la selección.
+    - Al hacer clic en "Continuar", se genera una versión recortada de la imagen como un data URI.
+
+2.  **Procesamiento con IA**
+    - El data URI recortado se envía a la función `processImage`.
+    - **Moderación:** Se llama primero a `moderateImage` (`image-moderation-agent.ts`). Si la imagen no es segura, el proceso se detiene y se muestra un error.
+    - **Generación de Detalles:** Si la moderación es exitosa, se llama a `generateArtworkDetails` (`artwork-details-generation-agent.ts`). La IA devuelve un título, descripción y etiquetas.
+    - El `UploadForm` se actualiza con los detalles generados por la IA, que el usuario puede editar.
+
+3.  **Configuración de Venta**
+    - El usuario puede activar los interruptores "List for Sale" y "Is this a Digital Asset?".
+    - Si es una venta, se muestra un campo para el precio.
+    - Si es un activo digital, se muestran campos para la blockchain, dirección de contrato y Token ID.
+
+4.  **Verificación y Envío Final**
+    - Al hacer clic en "Submit Artwork":
+    - **Verificación de NFT (si aplica):** Si es un activo digital, se llama al flujo `verifyNftOwnership` (`verify-nft-ownership-agent.ts`) para confirmar que el usuario posee el NFT en su billetera conectada. Si falla, el proceso se detiene.
+    - **Marca de Agua:** Se llama al flujo `watermarkImage` (`watermark-image-agent.ts`) con la imagen recortada. Este devuelve un nuevo data URI con la marca de agua aplicada.
+    - **Subida a Storage:** El data URI con marca de agua se sube a Firebase Storage en la ruta `artworks/{uid}/{timestamp}-{filename}`.
+    - **Guardado en Database:** Una vez subido, se obtiene la `downloadURL`. Se crea un nuevo registro en la ruta `/artworks` de la Realtime Database con todos los detalles (título, URL de la imagen, `storagePath`, `ownerId`, etc.).
+    - Se actualiza el contador de obras del usuario (`artworksCount`) y su uso de almacenamiento (`storageUsed`).
+
+### Flujo 3: Sistema de Reservas (Booking)
+
+1.  **Creación de Reserva (`BookingDialog`)**
+    - Un Cliente visita el perfil de un Artista/Estudio y hace clic en "Book Now".
+    - El cliente selecciona una fecha en el `Calendar` y escribe una descripción del tatuaje deseado.
+    - Al enviar, se crea un nuevo documento en `/bookings` con estado `pending`.
+    - Se crea una notificación para el artista.
+
+2.  **Gestión del Artista (`BookingList`)**
+    - El Artista ve la solicitud en su panel de "Booking Requests".
+    - **Aceptar:** El artista hace clic en "Accept". El estado de la reserva cambia a `awaiting_payment` (si hay depósito) o `confirmed` (si no hay depósito). Se notifica al cliente.
+    - **Rechazar:** El artista hace clic en "Decline". El estado cambia a `cancelled`. Se notifica al cliente.
+
+3.  **Pago del Depósito (Cliente)**
+    - Si el estado es `awaiting_payment`, el Cliente ve un botón "Pay Deposit".
+    - Al hacer clic, se conecta a su billetera (MetaMask) a través de `useWallet`.
+    - Se realiza una transacción de criptomoneda al `artistWalletAddress` del artista.
+    - Si la transacción tiene éxito, el estado de la reserva cambia a `confirmed`.
+
+4.  **Post-Sesión y Reseñas**
+    - Una vez pasada la fecha de la reserva, ambos (artista y cliente) ven un botón "Mark Attended".
+    - Cuando ambos confirman la asistencia, el estado de la reserva cambia a `completed`.
+    - Una vez completada, ambos usuarios ven un botón "Leave a Review", que abre el `ReviewDialog`.
+    - Al enviar una reseña, se crea un nuevo documento en `/reviews` y se actualizan los campos `rating` y `reviewCount` en el perfil del usuario reseñado.
+
+### Flujo 4: Verificación Facial (2FA)
+
+1.  **Gating:** Al hacer login con `twoFactorEnabled && facialScanUrl`, `login/page.tsx` redirige a `/verify-face` (`FaceVerifier`). En `/settings` el usuario también puede **registrar** su rostro (guarda `facialScanUrl` + `facialDescriptor`) y verificar.
+2.  **Cámara y contexto:** `camera.ts` pide permisos con `getUserMedia` (solo HTTPS/localhost; aviso específico si es HTTP, permiso denegado o cámara en uso; botón "Try Again"). La cámara se apaga tras cada intento.
+3.  **Detección facial (`captureFaceFrame`):** MediaPipe cuenta rostros. 0 o >1 → rechazo inmediato.
+4.  **Liveness (`captureLiveSequence`):** FaceLandmarker muestrea ~2.2s (~9fps, input 256px): rostro presente ≥60% + parpadeo o movimiento de cabeza ≥4°. Si el modelo no carga → fail-open.
+5.  **Embeddings (`verifyFaceDeterministically`):** face-api compara el descriptor en vivo contra `facialDescriptor` (distancia < 0.6). Mismatch duro → bloqueo antes de la IA (fail-open si no hay descriptor).
+6.  **IA (`verifyFace`):** Genkit/Gemini recibe la imagen registrada + 3 frames cronológicos y devuelve `isMatch` + `confidence`. Acepta solo con `confidence ≥ 0.8`.
+7.  **Rate limiting (`face-lock.ts`):** cada fallo suma en `facialAttempts` y bloquea escalando (3→30s, 5→5min, 7→30min). Éxito resetea el contador.
+8.  **Fallback (`email-fallback.ts`):** con cámara fallida o cuenta bloqueada, se envía `sendSignInLinkToEmail`; `verify-face/email-link` completa `signInWithEmailLink`, resetea fallos y redirige a `/`. El email va en la URL → funciona en otro dispositivo.

@@ -1,0 +1,110 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      ".read": true,
+      ".indexOn": [
+        "role",
+        "studioId",
+        "artistRequestStatus",
+        "email",
+        "walletAddress",
+        "claimedRewards/feature_slot",
+        "referredBy",
+        "name"
+      ],
+      "$uid": {
+        ".read": "auth != null && ( ( !data.child('isPrivate').exists() || data.child('isPrivate').val() === false ) || (auth.uid === $uid) || (data.child('followersList').hasChild(auth.uid)) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')) )",
+        ".write": "auth != null && (auth.uid === $uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".validate": "newData.hasChildren(['name', 'email', 'role', 'status'])"
+      }
+    },
+    "usernames": {
+      ".read": true,
+      "$username": {
+        ".write": "auth != null && (!data.exists() || data.val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))"
+      }
+    },
+    "artworks": {
+      ".read": true,
+      ".indexOn": ["artistId", "ownerId", "likesCount", "isForSale", "moderationStatus"],
+      "$artworkId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('artistId').val() === auth.uid) || (data.child('ownerId').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".validate": "newData.hasChildren(['title', 'imageUrl', 'artistId', 'ownerId', 'createdAt'])"
+      }
+    },
+    "comments": {
+      ".read": true,
+      ".indexOn": ["createdAt"],
+      "$artworkId": {
+        "$commentId": {
+          ".write": "auth != null && ((!data.exists() && newData.child('userId').val() === auth.uid) || data.child('userId').val() === auth.uid)",
+          ".validate": "newData.hasChildren(['userId', 'text', 'createdAt'])"
+        }
+      }
+    },
+    "bookings": {
+      ".indexOn": ["clientId", "artistId"],
+      "$bookingId": {
+        ".read": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".write": "auth != null && ( (newData.child('clientId').val() === auth.uid && !data.exists()) || data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".validate": "newData.hasChildren(['clientId', 'artistId', 'bookingDate', 'status', 'createdAt'])"
+      }
+    },
+    "reviews": {
+      ".read": true,
+      ".indexOn": ["revieweeId", "bookingId"],
+      "$reviewId": {
+        ".write": "auth != null && !data.exists() && newData.child('authorId').val() === auth.uid",
+        ".validate": "newData.hasChildren(['bookingId', 'rating', 'authorId', 'revieweeId', 'createdAt'])"
+      }
+    },
+    "products": {
+      ".read": true,
+      ".indexOn": "ownerId",
+      "$productId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('ownerId').val() === auth.uid) || (data.child('ownerId').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".validate": "newData.hasChildren(['name', 'imageUrl', 'ownerId', 'createdAt', 'externalLink'])"
+      }
+    },
+    "platform_settings": {
+      ".read": true,
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'"
+    },
+    "userSessions": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "chats": {
+      ".indexOn": ["lastMessage/timestamp", "participants"],
+      "$chatId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).exists()",
+        ".write": "auth != null && ( ( !data.exists() && newData.child('participants').child(auth.uid).exists() ) || ( data.exists() && data.child('participants').child(auth.uid).exists() ) )"
+      }
+    },
+    "messages": {
+      "$chatId": {
+        ".read": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists()",
+        ".indexOn": "timestamp"
+      }
+    },
+    "userChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "referrals": {
+      ".read": true,
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'"
+    },
+    "deletionLogs": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'"
+    }
+  }
+}

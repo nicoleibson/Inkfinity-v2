@@ -1,0 +1,107 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 9%; /* Almost Black */
+    --foreground: 210 40% 96%; /* Off-white */
+
+    --card: 240 10% 12%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 240 10% 7%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 260 70% 60%; /* Vibrant Purple */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 10% 20%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 240 10% 15%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 170 80% 45%; /* Bright Teal */
+    --accent-foreground: 240 10% 12%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 10% 20%;
+    --input: 240 10% 20%;
+    --ring: 260 70% 60%;
+
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 225 25% 9%; /* Deep Indigo */
+    --foreground: 30 25% 95%; /* Rice Paper White */
+
+    --card: 225 25% 12%; /* Slightly Lighter Indigo */
+    --card-foreground: 30 25% 95%;
+
+    --popover: 225 25% 7%;
+    --popover-foreground: 30 25% 95%;
+
+    --primary: 350 70% 55%; /* Crimson Red */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 25% 20%;
+    --secondary-foreground: 30 25% 95%;
+
+    --muted: 225 25% 15%;
+    --muted-foreground: 225 10% 60%;
+
+    --accent: 40 90% 60%; /* Saffron Gold */
+    --accent-foreground: 225 25% 12%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 25% 20%;
+    --input: 225 25% 20%;
+    --ring: 350 70% 55%;
+  }
+
+  .light {
+    --background: 40 50% 98%; /* Parchment White */
+    --foreground: 20 15% 15%; /* Dark Charcoal */
+
+    --card: 40 40% 94%;
+    --card-foreground: 20 15% 15%;
+    
+    --popover: 40 50% 98%;
+    --popover-foreground: 20 15% 15%;
+
+    --primary: 350 70% 45%; /* Crimson Red */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 30% 92%;
+    --secondary-foreground: 20 15% 15%;
+
+    --muted: 40 30% 92%;
+    --muted-foreground: 20 10% 45%;
+    
+    --accent: 150 40% 45%; /* Muted Jade Green */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 30% 88%;
+    --input: 40 30% 88%;
+    --ring: 350 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

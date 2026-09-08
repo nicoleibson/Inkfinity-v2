@@ -1,0 +1,68 @@
+import type { Metadata, Viewport } from "next";
+import { Lora, Cinzel } from 'next/font/google';
+import { Toaster } from "@/components/ui/toaster";
+import { AppProviders } from "@/context/app-providers";
+import Header from "@/components/layout/header";
+import Footer from "@/components/layout/footer";
+import "./globals.css";
+import { DynamicTheme } from "@/components/layout/dynamic-theme";
+import { ChatbotWidget } from "@/components/layout/chatbot-widget";
+
+const lora = Lora({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-body',
+});
+
+const cinzel = Cinzel({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-headline',
+});
+
+export const viewport: Viewport = {
+  themeColor: '#9333ea',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
+
+export const metadata: Metadata = {
+  title: "Inkfinity",
+  description: "A platform for tattoo artists and enthusiasts.",
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Inkfinity",
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  }
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${lora.variable} ${cinzel.variable} font-body antialiased min-h-screen flex flex-col`}>
+        <AppProviders>
+          <DynamicTheme />
+          <div className="w-full max-w-7xl mx-auto flex flex-col flex-grow">
+            <Header />
+            <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {children}
+            </main>
+            <Footer />
+          </div>
+          <ChatbotWidget />
+          <Toaster />
+        </AppProviders>
+      </body>
+    </html>
+  );
+}
