@@ -10,10 +10,6 @@
 import { geocodeAddressFlow } from '@/ai/agents/geocode-address-agent';
 import { type GeocodeAddressInput as GeocodeAddressInputType, type GeocodeAddressOutput as GeocodeAddressOutputType } from '@/ai/schemas/geocode-address-schema';
 
-export type GeocodeAddressInput = GeocodeAddressInputType;
-export type GeocodeAddressOutput = GeocodeAddressOutputType;
-
-
-export async function geocodeAddress(input: GeocodeAddressInput): Promise<GeocodeAddressOutput> {
+export async function geocodeAddress(input: GeocodeAddressInputType): Promise<GeocodeAddressOutputType> {
   return geocodeAddressFlow(input);
 }

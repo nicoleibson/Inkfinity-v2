@@ -1,7 +1,7 @@
 // src/context/wallet-provider.tsx
 "use client";
 
-import { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from "react";
+import { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef, Component, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { BrowserProvider, Eip1193Provider } from "ethers";
 import { useToast } from "@/hooks/use-toast";
@@ -12,10 +12,50 @@ import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { appkitEnabled } from "@/context/appkit";
 import type { AppKitBridgeState, AppKitBridgeActions } from "./appkit-bridge";
 
-const AppKitBridge = dynamic(
-  () => import("./appkit-bridge").then((m) => m.AppKitBridge),
-  { ssr: false }
-);
+// Resilient dynamic loader with retry to guard against transient network/chunk failures
+const loadAppKitBridge = async () => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const m = await import("./appkit-bridge");
+      return m.AppKitBridge;
+    } catch (err) {
+      console.warn(`[WalletProvider] Attempt ${attempt + 1} to load AppKit bridge failed:`, err);
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+  }
+  console.warn("[WalletProvider] AppKit chunk unavailable; continuing with standard injected wallet fallback.");
+  return () => null;
+};
+
+const AppKitBridge = dynamic(loadAppKitBridge, { ssr: false });
+
+class AppKitErrorBoundary extends Component<
+  { children: ReactNode; onError?: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; onError?: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("[WalletProvider] AppKit caught in boundary, falling back safely:", error);
+    this.props.onError?.();
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
 
 interface IWalletContext {
   connectWallet: () => Promise<void>;
@@ -80,6 +120,10 @@ async function linkWalletToAccount(newAddress: string): Promise<{ ok: boolean; i
 }
 
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const { toast } = useToast();
@@ -125,16 +169,19 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         return;
     }
 
-    if (appkitEnabled) {
-        if (!appkitOpenRef.current) {
-            toast({ variant: "destructive", title: "Wallet Browser Starting", description: "Please wait a moment and try again." });
-            return;
-        }
+    if (appkitEnabled && appkitOpenRef.current) {
         appkitOpenRef.current();
         return;
     }
 
     if (!window.ethereum) {
+      if (appkitEnabled) {
+        toast({
+          title: "Wallet Service Starting",
+          description: "Connecting to wallet service, please wait a moment and try again...",
+        });
+        return;
+      }
       toast({
         variant: "destructive",
         title: "MetaMask Not Found",
@@ -345,7 +392,13 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         isConnected: !!walletAddress && !!provider
       }}
     >
-      {appkitEnabled && <AppKitBridge onState={handleAppkitState} onActions={handleAppkitActions} />}
+      {mounted && appkitEnabled && (
+        <Suspense fallback={null}>
+          <AppKitErrorBoundary onError={() => { appkitOpenRef.current = null; }}>
+            <AppKitBridge onState={handleAppkitState} onActions={handleAppkitActions} />
+          </AppKitErrorBoundary>
+        </Suspense>
+      )}
       {children}
     </WalletContext.Provider>
   );

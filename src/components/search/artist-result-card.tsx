@@ -46,7 +46,7 @@ export function ArtistResultCard({ user, currentUser, onCreateChat, isCreatingCh
           </div>
         </CardContent>
       </Link>
-      {currentUser && currentUser.uid !== user.uid && onCreateChat && (
+      {currentUser && currentUser.uid !== user.uid && onCreateChat && (currentUser.role === 'Administrator' || currentUser.role === 'Super-Administrator' || user.role === 'Administrator' || user.role === 'Super-Administrator') && (
         <CardFooter className="p-2 border-t">
           <Button variant="ghost" className="w-full" onClick={handleMessageClick} disabled={isCreatingChat}>
             {isCreatingChat ? <Loader2 className="animate-spin"/> : <MessageSquare />}

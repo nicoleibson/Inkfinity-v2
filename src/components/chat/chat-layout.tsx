@@ -33,18 +33,39 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             return;
           }
 
-          const chatIds = Object.keys(snapshot.val());
-          const chatPromises = chatIds.map((id) => get(ref(database, `chats/${id}`)));
-          const chatSnapshots = await Promise.all(chatPromises);
+          const userRef = ref(database, `users/${user.uid}/role`);
+          const userSnap = await get(userRef);
+          const currentUserRole = userSnap.exists() ? userSnap.val() : 'Client';
+          const isAdmin = currentUserRole === 'Administrator' || currentUserRole === 'Super-Administrator';
 
-          const chatsData: Chat[] = chatSnapshots
-            .map((snap) => (snap.exists() ? { id: snap.key!, ...snap.val() } : null))
-            .filter((chat): chat is Chat => chat !== null && !!chat.participants)
-            .sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
-          
-          setChats(chatsData);
-          setLoading(false);
-        });
+      const chatIds = Object.keys(snapshot.val());
+      const chatPromises = chatIds.map((id) => get(ref(database, `chats/${id}`)));
+      const chatSnapshots = await Promise.all(chatPromises);
+      
+      const chatsDataRaw: Chat[] = chatSnapshots
+        .map((snap) => (snap.exists() ? { id: snap.key!, ...snap.val() } : null))
+        .filter((chat): chat is Chat => chat !== null && !!chat.participants)
+        .sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+      
+      const filteredChats: Chat[] = [];
+      for (const chat of chatsDataRaw) {
+          if (isAdmin) {
+              filteredChats.push(chat);
+              continue;
+          }
+          const otherParticipantId = Object.keys(chat.participants).find(id => id !== user.uid);
+          if (otherParticipantId) {
+              const otherUserSnap = await get(ref(database, `users/${otherParticipantId}/role`));
+              const otherRole = otherUserSnap.exists() ? otherUserSnap.val() : null;
+              if (otherRole === 'Administrator' || otherRole === 'Super-Administrator') {
+                  filteredChats.push(chat);
+              }
+          }
+      }
+
+      setChats(filteredChats);
+      setLoading(false);
+    });
 
         return () => unsubscribeUserChats();
 

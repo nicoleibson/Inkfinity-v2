@@ -8,10 +8,11 @@ import { ref, get, update, increment, query, orderByChild, equalTo, onValue, ser
 import ArtworkCard from '@/components/artwork-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Link as LinkIcon, UserPlus, Loader2, UserMinus, Lock, MessageSquare, Building, Star, Twitter, Instagram, Package, Gem, Users, LayoutGrid, BookUser } from 'lucide-react';
+import { MapPin, Link as LinkIcon, UserPlus, Loader2, UserMinus, Lock, MessageSquare, Building, Star, Twitter, Instagram, Package, Gem, Users, LayoutGrid, BookUser, MessageCircle, Send } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Artwork } from '@/types/artwork';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BookingDialog } from '@/components/bookings/booking-dialog';
 import { useUserSession } from '@/hooks/useUserSession';
 import { useToast } from '@/hooks/use-toast';
@@ -391,6 +392,12 @@ export default function UserProfilePage() {
                       {profileUser.links?.instagram && (
                           <a href={profileUser.links.instagram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><Instagram className="w-4 h-4" />Instagram</a>
                       )}
+                      {profileUser.links?.whatsapp && (
+                          <a href={profileUser.links.whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><MessageCircle className="w-4 h-4" />WhatsApp</a>
+                      )}
+                      {profileUser.links?.telegram && (
+                          <a href={profileUser.links.telegram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><Send className="w-4 h-4" />Telegram</a>
+                      )}
                       {profileUser.links?.twitter && (
                           <a href={profileUser.links.twitter} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><Twitter className="w-4 h-4" />Twitter</a>
                       )}
@@ -399,7 +406,7 @@ export default function UserProfilePage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 shrink-0">
+                  <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 shrink-0 mt-4 md:mt-0">
                     {canInteract && followStateDetermined && (
                         <>
                             <Button onClick={handleFollowToggle} disabled={isFollowLoading}>
@@ -412,10 +419,46 @@ export default function UserProfilePage() {
                                 )}
                                 {isFollowing ? 'Unfollow' : 'Follow'}
                             </Button>
-                            <Button variant="secondary" onClick={handleCreateChat} disabled={isCreatingChat}>
-                                {isCreatingChat ? <Loader2 className="animate-spin" /> : <MessageSquare />}
-                                Message
-                            </Button>
+                            {canInteract && (currentUserProfile?.role === 'Administrator' || currentUserProfile?.role === 'Super-Administrator' || profileUser.role === 'Administrator' || profileUser.role === 'Super-Administrator') ? (
+                                <Button variant="secondary" onClick={handleCreateChat} disabled={isCreatingChat}>
+                                    {isCreatingChat ? <Loader2 className="animate-spin" /> : <MessageSquare />}
+                                    Message
+                                </Button>
+                            ) : (
+                                (profileUser.role === 'Tattoo Artist' || profileUser.role === 'Studio') && (profileUser.links?.whatsapp || profileUser.links?.telegram || profileUser.links?.instagram) && (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="secondary">
+                                                <MessageSquare className="w-4 h-4 mr-2" />
+                                                Contact
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" sideOffset={6} collisionPadding={16} className="min-w-[190px] z-[100]">
+                                            {profileUser.links?.whatsapp && (
+                                                <DropdownMenuItem asChild>
+                                                    <a href={profileUser.links.whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center cursor-pointer">
+                                                        <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
+                                                    </a>
+                                                </DropdownMenuItem>
+                                            )}
+                                            {profileUser.links?.telegram && (
+                                                <DropdownMenuItem asChild>
+                                                    <a href={profileUser.links.telegram} target="_blank" rel="noopener noreferrer" className="flex items-center cursor-pointer">
+                                                        <Send className="w-4 h-4 mr-2" /> Telegram
+                                                    </a>
+                                                </DropdownMenuItem>
+                                            )}
+                                            {profileUser.links?.instagram && (
+                                                <DropdownMenuItem asChild>
+                                                    <a href={profileUser.links.instagram} target="_blank" rel="noopener noreferrer" className="flex items-center cursor-pointer">
+                                                        <Instagram className="w-4 h-4 mr-2" /> Instagram
+                                                    </a>
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )
+                            )}
                         </>
                     )}
                     {isBookable && !isViewingAsSupplyStore && (

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays } from 'lucide-react';
+import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { verifyFace } from '@/ai/flows/verify-face-flow';
@@ -775,6 +775,14 @@ export default function SettingsPage() {
                             <div className="relative">
                                <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
                                <Input name="instagram" value={profile.links?.instagram || ''} onChange={handleLinkChange} placeholder="Instagram URL" className="pl-9"/>
+                            </div>
+                            <div className="relative">
+                               <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                               <Input name="whatsapp" value={profile.links?.whatsapp || ''} onChange={handleLinkChange} placeholder="WhatsApp URL / Number" className="pl-9"/>
+                            </div>
+                            <div className="relative">
+                               <Send className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                               <Input name="telegram" value={profile.links?.telegram || ''} onChange={handleLinkChange} placeholder="Telegram URL" className="pl-9"/>
                             </div>
                             <div className="relative">
                                <Twitter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>

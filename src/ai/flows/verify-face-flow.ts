@@ -9,10 +9,7 @@
  */
 
 import { verifyFaceFlow } from '@/ai/agents/verify-face-agent';
-import { VerifyFaceInput, VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
-
-
-export type { VerifyFaceInput, VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
+import type { VerifyFaceInput, VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
 
 export async function verifyFace(
   input: VerifyFaceInput

@@ -1,5 +1,4 @@
 // src/lib/nft-sync.ts
-'use server';
 import { database } from './firebase-config';
 import { ref, get, query, orderByChild, equalTo, update } from 'firebase/database';
 import { verifyNftOwnership } from '@/ai/flows/verify-nft-ownership-flow';

@@ -4,9 +4,7 @@
  */
 
 import { autocompleteAddressAgentFlow } from '@/ai/agents/address-autocomplete-agent';
-import { AutocompleteAddressInput, AutocompleteAddressOutput, AutocompleteAddressSuggestion } from '@/ai/schemas/address-autocomplete-schema';
-
-export type { AutocompleteAddressInput, AutocompleteAddressOutput, AutocompleteAddressSuggestion };
+import type { AutocompleteAddressInput, AutocompleteAddressOutput } from '@/ai/schemas/address-autocomplete-schema';
 
 export async function autocompleteAddress(
   input: AutocompleteAddressInput

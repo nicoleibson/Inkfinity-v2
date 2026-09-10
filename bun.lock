@@ -32,7 +32,6 @@
         "@reown/appkit": "^1.8.23",
         "@reown/appkit-adapter-ethers": "^1.8.23",
         "@types/glob": "^8.1.0",
-        "@vladmandic/face-api": "^1.7.15",
         "@x402/core": "^2.25.0",
         "@x402/evm": "^2.25.0",
         "class-variance-authority": "^0.7.1",
@@ -40,7 +39,7 @@
         "date-fns": "^3.6.0",
         "dotenv": "^16.5.0",
         "embla-carousel-react": "^8.1.6",
-        "ethers": "^6.13.1",
+        "ethers": "^6.17.0",
         "firebase": "^12.6.0",
         "firebase-admin": "^12.2.0",
         "framer-motion": "^13.2.0",
@@ -897,8 +896,6 @@
     "@types/trusted-types": ["@types/trusted-types@2.0.7", "", {}, "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw=="],
 
     "@types/yauzl": ["@types/yauzl@2.10.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q=="],
-
-    "@vladmandic/face-api": ["@vladmandic/face-api@1.7.15", "", {}, "sha512-WDMmK3CfNLo8jylWqMoQgf4nIst3M0fzx1dnac96wv/dvMTN4DxC/Pq1DGtduDk1lktCamQ3MIDXFnvrdHTXDw=="],
 
     "@wallet-standard/base": ["@wallet-standard/base@1.1.1", "", {}, "sha512-gggIHTtxicF9XFMQ12DkfS6NAG92Ak795JeSA7f2whAQ6Y3AkMWWuCMxSZXG2NIPN42kEaZSNVjqMsJRaJRxMQ=="],
 

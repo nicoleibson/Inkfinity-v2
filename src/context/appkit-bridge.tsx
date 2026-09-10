@@ -53,6 +53,10 @@ function ensureAppKit() {
   }
 }
 
+if (typeof window !== "undefined") {
+  ensureAppKit();
+}
+
 export function AppKitBridge({
   onState,
   onActions,

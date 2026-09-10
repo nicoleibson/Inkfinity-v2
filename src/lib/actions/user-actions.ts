@@ -1,5 +1,4 @@
 // src/lib/actions/user-actions.ts
-'use server';
 
 import { database } from '@/lib/firebase-config';
 import { ref, get, update } from 'firebase/database';
