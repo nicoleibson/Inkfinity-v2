@@ -311,33 +311,38 @@ export default function UploadForm() {
       const imageUrl = await uploadDataUri(storagePath, watermarkedImageDataUri);
 
       setLoadingState('saving');
-      const newArtworkData: Partial<Artwork> = {
-        title: artworkDetails.title,
-        description: artworkDetails.description,
+      const rawArtworkData: Record<string, any> = {
+        title: artworkDetails.title || 'Untitled Artwork',
+        description: artworkDetails.description || '',
         tags: artworkDetails.tags || [],
         imageUrl: imageUrl,
         storagePath: storagePath,
         fileSize: file.size,
         artistId: user.uid,
-        artistName: currentUserProfile.name,
-        artistUsername: currentUserProfile.username,
-        artistAvatarUrl: currentUserProfile.avatarUrl,
+        artistName: currentUserProfile.name || '',
+        artistUsername: currentUserProfile.username || '',
+        artistAvatarUrl: currentUserProfile.avatarUrl || null,
         ownerId: user.uid,
-        ownerName: currentUserProfile.name,
+        ownerName: currentUserProfile.name || '',
         createdAt: new Date().toISOString(),
         isForSale: isForSale, 
         price: isForSale ? Number(price) : null,
         isDigitalAsset: isForSale, // For sale unified with NFT
-        blockchain: isForSale ? blockchain : undefined,
-        contractAddress: isForSale ? contractAddress : undefined,
-        tokenId: isForSale ? tokenId : undefined,
+        blockchain: isForSale ? blockchain : null,
+        contractAddress: isForSale ? (contractAddress || null) : null,
+        tokenId: isForSale ? (tokenId || null) : null,
         ownershipMismatch: false,
         moderationStatus: 'approved',
         location: currentUserProfile.location || null,
         locationName: currentUserProfile.locationName || null,
       };
 
-      await set(newArtworkRef, newArtworkData);
+      // Strip any undefined keys so Firebase Realtime Database never throws "value argument contains undefined"
+      const cleanArtworkData = Object.fromEntries(
+        Object.entries(rawArtworkData).filter(([_, val]) => val !== undefined)
+      );
+
+      await set(newArtworkRef, cleanArtworkData);
       
       await update(databaseRef(db, `users/${user.uid}`), {
           artworksCount: increment(1),
