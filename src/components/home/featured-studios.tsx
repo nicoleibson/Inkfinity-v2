@@ -73,24 +73,26 @@ export function FeaturedStudios() {
     }
 
     return (
-        <Carousel
-          opts={{
-            align: "start",
-            loop: true,
-          }}
-          className="w-full max-w-sm sm:max-w-xl md:max-w-3xl lg:max-w-5xl mx-auto"
-        >
-          <CarouselContent className="-ml-4">
-            {studios.map(studio => (
-               <CarouselItem key={studio.uid} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4">
-                 <div className="p-1 h-full">
-                    <ArtistResultCard user={studio} />
-                </div>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious />
-          <CarouselNext />
-        </Carousel>
+        <div className="relative px-2 sm:px-6 lg:px-8">
+            <Carousel
+              opts={{
+                align: "start",
+                loop: true,
+              }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-4">
+                {studios.map(studio => (
+                   <CarouselItem key={studio.uid} className="pl-4 basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/4">
+                     <div className="p-1 h-full">
+                        <ArtistResultCard user={studio} />
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="hidden sm:flex -left-4 lg:-left-6 bg-card/90 hover:bg-card border-border shadow-md" />
+              <CarouselNext className="hidden sm:flex -right-4 lg:-right-6 bg-card/90 hover:bg-card border-border shadow-md" />
+            </Carousel>
+        </div>
     )
 }

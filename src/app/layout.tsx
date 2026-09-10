@@ -49,12 +49,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${lora.variable} ${cinzel.variable} font-body antialiased min-h-screen flex flex-col`}>
+      <body className={`${lora.variable} ${cinzel.variable} font-body antialiased min-h-screen flex flex-col bg-background text-foreground`}>
         <AppProviders>
           <DynamicTheme />
-          <div className="w-full max-w-7xl mx-auto flex flex-col flex-grow">
+          <div className="min-h-screen flex flex-col w-full">
             <Header />
-            <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
               {children}
             </main>
             <Footer />

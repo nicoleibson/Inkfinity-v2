@@ -271,33 +271,82 @@ function SearchPageClient() {
         <p className="text-muted-foreground mt-2">Find exactly what you're looking for.</p>
       </div>
 
-      <Card className="max-w-4xl mx-auto">
-        <CardHeader>
-          <CardTitle className="font-headline">Filter Options</CardTitle>
+      <Card className="max-w-4xl mx-auto border-border/80 shadow-md">
+        <CardHeader className="pb-4">
+          <CardTitle className="font-headline text-xl">Search & Filter Criteria</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Category Tabs / Pills for Desktop & Mobile */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Category</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: "artwork", label: "Artworks", icon: "🖼️" },
+                { id: "artist", label: "Artists", icon: "🎨" },
+                { id: "studio", label: "Studios", icon: "🏛️" },
+                { id: "supply_store", label: "Supply Stores", icon: "📦" },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategory(cat.id as SearchCategory)}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                    category === cat.id
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-card hover:bg-accent/60 border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="keywords">Keywords</Label>
+              <Label htmlFor="keywords">Keywords or Style</Label>
               <Input 
                 id="keywords" 
-                placeholder="e.g., Dragon, Rose, Skull..." 
+                placeholder="e.g., Dragon, Realism, Blackwork, Floral..." 
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                className="h-11"
               />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {["Realism", "Blackwork", "Traditional", "Fine Line"].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setKeywords(s);
+                      setCategory("artwork");
+                    }}
+                    className="text-[11px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors text-muted-foreground"
+                  >
+                    +{s}
+                  </button>
+                ))}
+              </div>
             </div>
              <div className="space-y-2">
-              <Label>Location</Label>
+              <Label>Location Filter</Label>
               <div className="flex gap-2">
                  <Button
                     type="button"
                     variant="outline"
                     onClick={handleGetLocation}
                     disabled={isFetchingLocation}
-                    className="w-full"
+                    className="w-full h-11"
                 >
-                    {isFetchingLocation ? <Loader2 className="animate-spin" /> : <MapPin />}
-                    <span className="ml-2">Use My Location</span>
+                    {isFetchingLocation ? <Loader2 className="animate-spin h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                    <span className="ml-2">Use My Current Location</span>
                 </Button>
                 {locationName && (
                   <Button
@@ -305,35 +354,24 @@ function SearchPageClient() {
                     variant="ghost"
                     size="icon"
                     onClick={clearLocation}
+                    className="h-11 w-11"
                   >
                     <XCircle className="h-5 w-5 text-muted-foreground" />
                   </Button>
                 )}
               </div>
               {locationName && (
-                <p className="text-xs text-muted-foreground pt-1">
-                  Searching near: <strong>{locationName}</strong>
+                <p className="text-xs text-muted-foreground pt-1 flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-primary" />
+                  <span>Searching near: <strong>{locationName}</strong></span>
                 </p>
               )}
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(value: SearchCategory) => setCategory(value)}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Search for..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="artwork">Artwork</SelectItem>
-                  <SelectItem value="artist">Artists</SelectItem>
-                  <SelectItem value="studio">Studios</SelectItem>
-                  <SelectItem value="supply_store">Supply Stores</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <Button size="lg" className="w-full" onClick={handleSearch} disabled={loading}>
-            {loading ? <Loader2 className="animate-spin"/> : <SearchIcon />}
-            Search
+
+          <Button size="lg" className="w-full h-12 rounded-xl text-base font-semibold shadow-md gap-2" onClick={handleSearch} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin h-5 w-5"/> : <SearchIcon className="h-5 w-5" />}
+            <span>Search {category === 'artwork' ? 'Artworks' : category === 'artist' ? 'Artists' : category === 'studio' ? 'Studios' : 'Supplies'}</span>
           </Button>
         </CardContent>
       </Card>

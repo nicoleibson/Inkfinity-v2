@@ -44,9 +44,9 @@ import { useUserSession } from "@/hooks/useUserSession";
 import { auth, database } from "@/lib/firebase-config";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { User as FirebaseUser } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ref, onValue } from "firebase/database";
 import { useWallet } from "@/context/wallet-provider";
 import type { UserProfile } from "@/types/user";
@@ -55,8 +55,8 @@ import { NotificationBell } from './notification-bell';
 import { ThemeToggle } from "./theme-toggle";
 
 const navLinks = [
-  { href: "/search", label: "Search", icon: Search, auth: false, adminOnly: false },
-  { href: "/upload", label: "Upload", icon: Upload, auth: true, adminOnly: false },
+  { href: "/search", label: "Explore & Search", icon: Search, auth: false, adminOnly: false },
+  { href: "/upload", label: "Upload Art", icon: Upload, auth: true, adminOnly: false },
   { href: "/rewards", label: "Rewards", icon: Gem, auth: true, adminOnly: false },
 ];
 
@@ -67,7 +67,20 @@ export default function Header() {
   
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
   const { connectWallet, disconnectWallet, walletAddress, isConnected } = useWallet();
+
+  // Keyboard shortcut (Cmd+K or Ctrl+K) to open search on desktop
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        router.push("/search");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
   // This hook receives the userProfile and handles session logic
   useUserSession(userProfile as UserProfile);
@@ -147,7 +160,7 @@ export default function Header() {
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+            <nav className="hidden md:flex items-center space-x-1 lg:space-x-1.5">
               {navLinks.map((link) => {
                  if (link.adminOnly && !isAdmin) return null;
                  if (!link.adminOnly && isAdmin) return null;
@@ -155,10 +168,21 @@ export default function Header() {
                  if (link.href === '/upload' && !isArtist) return null;
                  if (link.href === '/rewards' && isAdmin) return null;
 
+                const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
+
                 return (
-                  <Button key={link.href} variant="ghost" asChild className="text-muted-foreground hover:text-foreground hover:bg-accent/70 rounded-lg px-3.5">
+                  <Button 
+                    key={link.href} 
+                    variant="ghost" 
+                    asChild 
+                    className={`rounded-lg px-3.5 transition-all text-sm ${
+                      isActive 
+                        ? "bg-primary/15 text-primary font-semibold hover:bg-primary/20 shadow-xs" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/70 font-medium"
+                    }`}
+                  >
                     <Link href={link.href} className="flex items-center gap-2">
-                      <link.icon className="h-4 w-4" />
+                      <link.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       <span>{link.label}</span>
                     </Link>
                   </Button>
@@ -169,6 +193,20 @@ export default function Header() {
 
           {/* Right Action Controls */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Desktop Quick Search Trigger */}
+            <button
+              onClick={() => router.push('/search')}
+              className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/80 bg-muted/30 hover:bg-accent/60 text-xs text-muted-foreground hover:text-foreground transition-all duration-200 w-44 group cursor-pointer"
+              title="Search artworks, artists and styles"
+              aria-label="Search Inkfinity"
+            >
+              <Search className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="flex-1 text-left truncate">Search styles...</span>
+              <kbd className="inline-flex h-4 select-none items-center rounded border border-border/80 bg-card px-1 font-mono text-[10px] text-muted-foreground">
+                ⌘K
+              </kbd>
+            </button>
+
             <ThemeToggle />
 
             {user ? (
