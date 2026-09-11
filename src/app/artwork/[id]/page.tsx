@@ -9,7 +9,7 @@ import { ref, get, onValue, update, push, serverTimestamp, query, orderByChild, 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Heart, MessageCircle, Share2, Wallet, Loader2, User, UserPlus, AlertTriangle, History, ArrowRight, Trash2, CheckCheck, Clock, Pencil, Save } from "lucide-react";
+import { Heart, MessageCircle, Share2, Wallet, Loader2, User, UserPlus, AlertTriangle, History, ArrowRight, Trash2, CheckCheck, Clock, Pencil, Save, Cloud, Database, ExternalLink, ImageOff, Gem } from "lucide-react";
 import type { Artwork, SaleRecord } from '@/types/artwork';
 import type { UserProfile, Notification, Comment } from '@/types/user';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -53,6 +53,7 @@ export default function ArtworkDetailPage() {
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [editingComment, setEditingComment] = useState<{ id: string; text: string } | null>(null);
+  const [imageError, setImageError] = useState(false);
   const { toast } = useToast();
   const { provider, connectWallet, isConnected, walletAddress } = useWallet();
   const { settings } = usePlatformSettings();
@@ -506,12 +507,22 @@ export default function ArtworkDetailPage() {
     <div className="grid lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-8">
         <div className="aspect-[4/3] relative rounded-lg overflow-hidden border-2 border-primary/20 shadow-lg shadow-primary/10 bg-muted" onContextMenu={(e) => e.preventDefault()}>
-          <Image
-            src={artwork.imageUrl}
-            alt={artwork.title}
-            fill
-            className="object-contain"
-          />
+          {!imageError && artwork.imageUrl ? (
+            <Image
+              src={artwork.imageUrl}
+              alt={artwork.title}
+              fill
+              onError={() => setImageError(true)}
+              className="object-contain"
+              unoptimized={artwork.imageUrl.startsWith('data:') || artwork.imageUrl.includes('lh3.googleusercontent.com')}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-muted text-muted-foreground gap-3">
+              <ImageOff className="h-16 w-16 text-muted-foreground/50" />
+              <p className="font-semibold text-lg text-foreground">{artwork.title}</p>
+              <p className="text-xs text-muted-foreground max-w-sm">Vista previa no disponible para esta obra histórica.</p>
+            </div>
+          )}
           <div className="absolute inset-0 bg-transparent"></div>
         </div>
 
@@ -685,6 +696,57 @@ export default function ArtworkDetailPage() {
                 {artwork.description}
             </p>
         </div>
+
+        {/* Storage & Provenance details */}
+        {(artwork.storageType === 'google-drive' || artwork.googleDriveFileId || artwork.storageType === 'ipfs' || artwork.ipfsHash) && (
+          <div className="rounded-lg border p-3.5 bg-card/60 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Almacenamiento Verificado</h3>
+            {artwork.storageType === 'google-drive' || artwork.googleDriveFileId ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5 text-foreground font-medium">
+                  <Cloud className="h-4 w-4 text-blue-500" />
+                  Google Drive (Carpeta Inkfinity Artworks)
+                </span>
+                {artwork.googleDriveViewUrl && (
+                  <a
+                    href={artwork.googleDriveViewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    Ver archivo <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            ) : null}
+
+            {artwork.storageType === 'ipfs' || artwork.ipfsHash ? (
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-foreground font-medium">
+                    <Database className="h-4 w-4 text-purple-500" />
+                    IPFS Descentralizado (Web3)
+                  </span>
+                  {artwork.ipfsHash && (
+                    <a
+                      href={`https://ipfs.io/ipfs/${artwork.ipfsHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      Gateway IPFS <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+                {artwork.ipfsHash && (
+                  <p className="text-[11px] font-mono text-muted-foreground truncate">
+                    CID: {artwork.ipfsHash}
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
 
         <div className="flex items-center space-x-4 text-muted-foreground">
             {!isSupplyStore && !isAdmin && (

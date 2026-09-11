@@ -17,7 +17,22 @@
       "$uid": {
         ".read": "auth != null && ( ( !data.child('isPrivate').exists() || data.child('isPrivate').val() === false ) || (auth.uid === $uid) || (data.child('followersList').hasChild(auth.uid)) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')) )",
         ".write": "auth != null && (auth.uid === $uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
-        ".validate": "newData.hasChildren(['name', 'email', 'role', 'status'])"
+        ".validate": "newData.hasChildren(['name', 'email', 'role', 'status'])",
+        "notifications": {
+          ".write": "auth != null"
+        },
+        "followersList": {
+          ".write": "auth != null"
+        },
+        "followersCount": {
+          ".write": "auth != null"
+        },
+        "rating": {
+          ".write": "auth != null"
+        },
+        "reviewCount": {
+          ".write": "auth != null"
+        }
       }
     },
     "usernames": {
@@ -31,7 +46,13 @@
       ".indexOn": ["artistId", "ownerId", "likesCount", "isForSale", "moderationStatus"],
       "$artworkId": {
         ".write": "auth != null && ((!data.exists() && newData.child('artistId').val() === auth.uid) || (data.child('ownerId').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
-        ".validate": "newData.hasChildren(['title', 'imageUrl', 'artistId', 'ownerId', 'createdAt'])"
+        ".validate": "newData.hasChildren(['title', 'imageUrl', 'artistId', 'ownerId', 'createdAt'])",
+        "likesCount": {
+          ".write": "auth != null"
+        },
+        "commentsCount": {
+          ".write": "auth != null"
+        }
       }
     },
     "comments": {

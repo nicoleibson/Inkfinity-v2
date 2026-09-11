@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { Artwork } from "@/types/artwork";
 import { Card, CardFooter, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, User } from "lucide-react";
+import { Heart, User, Cloud, Database, ImageOff, Gem } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { auth, database } from "@/lib/firebase-config";
@@ -24,6 +24,7 @@ type ArtworkCardProps = {
 export default function ArtworkCard({ artwork, currentUserProfile }: ArtworkCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(artwork.likesCount || 0);
+  const [imageError, setImageError] = useState(false);
   const { toast } = useToast();
   const [artistAvatar, setArtistAvatar] = useState(artwork.artistAvatarUrl);
 
@@ -127,16 +128,39 @@ export default function ArtworkCard({ artwork, currentUserProfile }: ArtworkCard
       <Card className="h-full group overflow-hidden border-2 border-primary/10 hover:border-primary/50 transition-colors duration-300 shadow-sm hover:shadow-xl hover:shadow-primary/20">
       <CardContent className="p-0">
         <Link href={`/artwork/${artwork.id}`}>
-            <div className="aspect-[3/4] relative bg-muted rounded-t-lg" onContextMenu={(e) => e.preventDefault()}>
-              <Image
-                src={artwork.imageUrl}
-                alt={artwork.title}
-                fill
-                className="transition-transform duration-300 group-hover:scale-105"
-                style={{ objectFit: "contain" }}
-                data-ai-hint={artwork.dataAiHint}
-              />
+            <div className="aspect-[3/4] relative bg-muted rounded-t-lg overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
+              {!imageError && artwork.imageUrl ? (
+                <Image
+                  src={artwork.imageUrl}
+                  alt={artwork.title}
+                  fill
+                  onError={() => setImageError(true)}
+                  className="transition-transform duration-300 group-hover:scale-105"
+                  style={{ objectFit: "contain" }}
+                  data-ai-hint={artwork.dataAiHint}
+                  unoptimized={artwork.imageUrl.startsWith('data:') || artwork.imageUrl.includes('lh3.googleusercontent.com')}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-muted/60 text-muted-foreground gap-2">
+                  <ImageOff className="h-8 w-8 text-muted-foreground/60" />
+                  <p className="text-xs line-clamp-2 px-2 font-medium">{artwork.title}</p>
+                </div>
+              )}
               <div className="absolute inset-0 bg-transparent"></div>
+
+              {/* Storage indicator tag */}
+              <div className="absolute top-2 left-2 flex gap-1 z-10">
+                {artwork.storageType === 'google-drive' && (
+                  <span className="bg-background/85 backdrop-blur-sm text-foreground text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm font-medium border border-border">
+                    <Cloud className="w-2.5 h-2.5 text-blue-500" /> Drive
+                  </span>
+                )}
+                {(artwork.storageType === 'ipfs' || artwork.isDigitalAsset) && (
+                  <span className="bg-background/85 backdrop-blur-sm text-foreground text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm font-medium border border-border">
+                    <Gem className="w-2.5 h-2.5 text-purple-500" /> IPFS
+                  </span>
+                )}
+              </div>
             </div>
         </Link>
       </CardContent>

@@ -81,18 +81,21 @@ export function ReviewDialog({ open, onOpenChange, booking, currentUserProfile, 
 
         await update(ref(database), updates);
 
-        // Atomically update the reviewee's rating and review count
-        await runTransaction(revieweeRef, (user) => {
-            if (user) {
-                const currentRating = user.rating || 0;
-                const currentReviewCount = user.reviewCount || 0;
-                const newReviewCount = currentReviewCount + 1;
-                const newTotalRating = (currentRating * currentReviewCount) + rating;
-                user.rating = newTotalRating / newReviewCount;
-                user.reviewCount = newReviewCount;
-            }
-            return user;
-        });
+        // Fetch the user to calculate the new rating
+        const userSnapshot = await get(revieweeRef);
+        if (userSnapshot.exists()) {
+            const user = userSnapshot.val();
+            const currentRating = user.rating || 0;
+            const currentReviewCount = user.reviewCount || 0;
+            const newReviewCount = currentReviewCount + 1;
+            const newTotalRating = (currentRating * currentReviewCount) + rating;
+            const newRating = newTotalRating / newReviewCount;
+            
+            await update(revieweeRef, {
+                rating: newRating,
+                reviewCount: newReviewCount
+            });
+        }
 
         toast({ title: "Review Submitted!", description: `Thank you for reviewing ${revieweeName}.`});
         onOpenChange(false);

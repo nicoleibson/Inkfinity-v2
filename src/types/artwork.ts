@@ -38,6 +38,13 @@ export interface Artwork {
   
   isPrivate?: boolean;
   
+  // Storage properties
+  storageType?: 'google-drive' | 'ipfs' | 'local' | 'cloud-storage';
+  ipfsHash?: string;
+  googleDriveFileId?: string;
+  googleDriveFolderId?: string;
+  googleDriveViewUrl?: string;
+
   // Web3 properties
   isDigitalAsset: boolean; // Changed to non-optional
   blockchain?: 'amoy' | 'polygon';

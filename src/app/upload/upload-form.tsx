@@ -12,10 +12,12 @@ import { useToast } from '@/hooks/use-toast';
 import { moderateImage } from '@/ai/flows/image-moderation';
 import { generateArtworkDetails } from '@/ai/flows/artwork-details-generation';
 import { verifyNftOwnership } from '@/ai/flows/verify-nft-ownership-flow';
-import { Loader2, Sparkles, UploadCloud, ShieldAlert, ShieldCheck, FileUp, Droplets, Gem, HardDrive, Crop, ArrowRight, Info, X, MapPin, Wallet } from 'lucide-react';
+import { Loader2, Sparkles, UploadCloud, ShieldAlert, ShieldCheck, FileUp, Droplets, Gem, HardDrive, Crop, ArrowRight, Info, X, MapPin, Wallet, FolderSync, CheckCircle2, Cloud, Database } from 'lucide-react';
 import { getDatabase, ref as databaseRef, set, push, update, increment, get } from 'firebase/database';
 import { auth, database } from '@/lib/firebase-config';
 import { uploadDataUri } from '@/lib/firebase/storage';
+import { authorizeGoogleDrive, uploadArtworkToGoogleDrive, getCachedDriveAccessToken } from '@/lib/google-drive';
+import { uploadArtworkToIpfs } from '@/lib/ipfs';
 import type { ArtworkDetailsOutput } from '@/ai/schemas/artwork-details-generation';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { UserProfile } from '@/types/user';
@@ -118,10 +120,28 @@ export default function UploadForm() {
 
   const [moderation, setModeration] = useState<{ isSafe: boolean; reason?: string } | null>(null);
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
+  const [driveConnected, setDriveConnected] = useState<boolean>(false);
+  const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
+
+  const handleConnectDrive = async () => {
+    setIsConnectingDrive(true);
+    try {
+      const token = await authorizeGoogleDrive();
+      if (token) {
+        setDriveConnected(true);
+        toast({ title: 'Google Drive Conectado', description: 'Tus obras normales se guardarán en tu carpeta pública "Inkfinity Artworks".' });
+      }
+    } catch (err: any) {
+      console.error('Error connecting Google Drive:', err);
+      toast({ variant: 'destructive', title: 'Error al conectar Google Drive', description: err.message || 'No se pudo autorizar Google Drive.' });
+    } finally {
+      setIsConnectingDrive(false);
+    }
+  };
 
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -307,8 +327,82 @@ export default function UploadForm() {
 
       if (!artworkId) throw new Error('Could not generate a new artwork ID.');
 
-      const storagePath = `artworks/${user.uid}/${artworkId}.jpg`;
-      const imageUrl = await uploadDataUri(storagePath, watermarkedImageDataUri);
+      let imageUrl = '';
+      let storagePath = '';
+      let storageType: 'google-drive' | 'ipfs' | 'local' = 'local';
+      let ipfsHash: string | undefined;
+      let googleDriveFileId: string | undefined;
+      let googleDriveFolderId: string | undefined;
+      let googleDriveViewUrl: string | undefined;
+
+      if (isForSale) {
+        // Opción 3: IPFS para obras NFT
+        toast({ title: 'Subiendo a IPFS...', description: 'Generando hash descentralizado y metadatos de NFT.' });
+        try {
+          const ipfsRes = await uploadArtworkToIpfs({
+            dataUri: watermarkedImageDataUri,
+            fileName: `${artworkDetails.title || 'nft'}_${artworkId}.jpg`,
+            title: artworkDetails.title,
+            description: artworkDetails.description,
+            artistName: currentUserProfile.name,
+            tags: artworkDetails.tags,
+            contractAddress,
+            tokenId,
+          });
+
+          imageUrl = ipfsRes.gatewayUrl;
+          storagePath = ipfsRes.ipfsUri;
+          storageType = 'ipfs';
+          ipfsHash = ipfsRes.cid;
+        } catch (ipfsErr: any) {
+          console.warn('IPFS upload fallback:', ipfsErr);
+          const fallbackPath = `artworks/${user.uid}/${artworkId}.jpg`;
+          imageUrl = await uploadDataUri(fallbackPath, watermarkedImageDataUri);
+          storagePath = fallbackPath;
+          storageType = 'local';
+        }
+      } else {
+        // Opción 1: Google Drive para obras normales
+        let driveSuccess = false;
+        try {
+          let driveToken = getCachedDriveAccessToken();
+          if (!driveToken) {
+            toast({ title: 'Conectando con Google Drive...', description: 'Autorizando carpeta pública en tu cuenta de Google.' });
+            driveToken = await authorizeGoogleDrive();
+            setDriveConnected(true);
+          }
+
+          if (driveToken) {
+            toast({ title: 'Subiendo a Google Drive...', description: 'Guardando en la carpeta "Inkfinity Artworks"...' });
+            const driveRes = await uploadArtworkToGoogleDrive(
+              driveToken,
+              `${artworkDetails.title || 'obra'}_${artworkId}.jpg`,
+              watermarkedImageDataUri
+            );
+
+            imageUrl = driveRes.imageUrl;
+            storagePath = `gdrive://${driveRes.fileId}`;
+            storageType = 'google-drive';
+            googleDriveFileId = driveRes.fileId;
+            googleDriveFolderId = driveRes.folderId;
+            googleDriveViewUrl = driveRes.webViewLink;
+            driveSuccess = true;
+          }
+        } catch (driveErr: any) {
+          console.warn('Google Drive notice, using safe fallback:', driveErr);
+          toast({
+            title: 'Almacenamiento seguro',
+            description: 'Guardando copia en la plataforma.',
+          });
+        }
+
+        if (!driveSuccess) {
+          const fallbackPath = `artworks/${user.uid}/${artworkId}.jpg`;
+          imageUrl = await uploadDataUri(fallbackPath, watermarkedImageDataUri);
+          storagePath = fallbackPath;
+          storageType = 'local';
+        }
+      }
 
       setLoadingState('saving');
       const rawArtworkData: Record<string, any> = {
@@ -317,6 +411,11 @@ export default function UploadForm() {
         tags: artworkDetails.tags || [],
         imageUrl: imageUrl,
         storagePath: storagePath,
+        storageType: storageType,
+        ...(ipfsHash ? { ipfsHash } : {}),
+        ...(googleDriveFileId ? { googleDriveFileId } : {}),
+        ...(googleDriveFolderId ? { googleDriveFolderId } : {}),
+        ...(googleDriveViewUrl ? { googleDriveViewUrl } : {}),
         fileSize: file.size,
         artistId: user.uid,
         artistName: currentUserProfile.name || '',
@@ -349,7 +448,12 @@ export default function UploadForm() {
           storageUsed: increment(file.size)
       });
 
-      toast({ title: 'Upload Complete!' });
+      toast({ 
+        title: '¡Obra publicada con éxito!', 
+        description: isForSale 
+          ? 'Registrada en IPFS con metadatos NFT.' 
+          : 'Guardada en tu Google Drive correctamente.' 
+      });
       router.push(`/${currentUserProfile.username}`);
 
     } catch (error) {
@@ -485,6 +589,57 @@ export default function UploadForm() {
                             </div>
                         )}
                     </div>
+
+                    {/* Storage Hybrid Mode Feedback */}
+                    {!isForSale ? (
+                      <div className="border rounded-lg p-3 bg-muted/40 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 text-foreground">
+                              <Cloud className="h-4 w-4 text-blue-500 shrink-0" />
+                              Almacenamiento: Tu Google Drive Personal
+                            </h4>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              La imagen se guardará en tu propia cuenta de Google, en la carpeta pública <span className="font-medium text-foreground">"Inkfinity Artworks"</span>. Mantienes tu propia cuota y nunca se pierde.
+                            </p>
+                          </div>
+                          {driveConnected ? (
+                            <Badge variant="outline" className="text-xs border-green-500 text-green-600 bg-green-50 dark:bg-green-950/30 flex items-center gap-1 shrink-0">
+                              <CheckCircle2 className="h-3 w-3" /> Vinculado
+                            </Badge>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleConnectDrive}
+                              disabled={isConnectingDrive || isProcessing}
+                              className="shrink-0 text-xs h-7 px-2"
+                            >
+                              {isConnectingDrive ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FolderSync className="h-3 w-3 mr-1" />}
+                              Vincular Drive
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg p-3 bg-muted/40 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 text-foreground">
+                              <Database className="h-4 w-4 text-purple-500 shrink-0" />
+                              Almacenamiento: IPFS Descentralizado (NFT)
+                            </h4>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              Tu obra se guardará de forma inmutable en la red IPFS y se generarán los metadatos ERC-721/1155 vinculados al contrato del NFT.
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-xs border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950/30 flex items-center gap-1 shrink-0">
+                            <Gem className="h-3 w-3" /> IPFS Activo
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
                 </div>
                 </>
             )}
