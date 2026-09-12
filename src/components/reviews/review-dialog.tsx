@@ -20,7 +20,7 @@ import type { UserProfile } from '@/types/user';
 import { cn } from '@/lib/utils';
 import type { Review } from '@/types/review';
 import { database } from '@/lib/firebase-config';
-import { ref, push, set, update, serverTimestamp, runTransaction } from 'firebase/database';
+import { ref, push, set, update, serverTimestamp, runTransaction, get } from 'firebase/database';
 
 interface ReviewDialogProps {
   open: boolean;

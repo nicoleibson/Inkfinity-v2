@@ -10,7 +10,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Star } from "lucide-react";
+import { Star, ImageOff } from "lucide-react";
 import { motion } from "framer-motion";
 
 async function fetchFeaturedArtwork(): Promise<Artwork | null> {
@@ -59,6 +59,7 @@ async function fetchFeaturedArtwork(): Promise<Artwork | null> {
 export function FeaturedArtworks() {
     const [artwork, setArtwork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
+    const [imageError, setImageError] = useState(false);
 
     useEffect(() => {
         fetchFeaturedArtwork().then(result => {
@@ -94,8 +95,21 @@ export function FeaturedArtworks() {
             transition={{ duration: 0.7 }}
             className="grid md:grid-cols-2 gap-8 items-center bg-card p-8 md:p-12 rounded-3xl border border-primary/20 shadow-2xl shadow-primary/10"
         >
-            <div className="relative aspect-video rounded-2xl overflow-hidden group shadow-lg">
-                 <Image src={artwork.imageUrl} alt={artwork.title} fill className="object-contain transition-transform duration-500 group-hover:scale-105" />
+            <div className="relative aspect-video rounded-2xl overflow-hidden group shadow-lg bg-muted flex items-center justify-center">
+                 {!imageError && artwork.imageUrl ? (
+                     <Image 
+                         src={artwork.imageUrl} 
+                         alt={artwork.title} 
+                         fill 
+                         onError={() => setImageError(true)}
+                         className="object-contain transition-transform duration-500 group-hover:scale-105" 
+                     />
+                 ) : (
+                     <div className="flex flex-col items-center gap-2 text-muted-foreground/60 p-4 text-center">
+                         <ImageOff className="h-12 w-12" />
+                         <p className="text-sm font-medium">{artwork.title}</p>
+                     </div>
+                 )}
                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                  <Link href={`/artwork/${artwork.id}`} className="absolute inset-0" aria-label={`View ${artwork.title}`}></Link>
             </div>

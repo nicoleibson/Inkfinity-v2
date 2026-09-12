@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
 
   const asset = ipfsStore.get(cid);
   if (asset) {
-    return new NextResponse(asset.buffer, {
+    return new NextResponse(asset.buffer as any, {
       headers: {
         "Content-Type": asset.mimeType,
         "Cache-Control": "public, max-age=31536000, immutable",

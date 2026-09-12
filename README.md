@@ -19,7 +19,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 ## Key Features
 
 *   **Role-Based User System:** Distinct roles for Clients, Tattoo Artists, Studios, and Supply Stores, each with a tailored user experience.
-*   **AI-Powered Onboarding & Content Creation:** New users get AI-generated bios and avatars, and artists receive AI assistance for artwork titles, descriptions, and tags.
+*   **AI-Powered Onboarding & Content Creation:** New users get AI-generated bios, and artists receive AI assistance for artwork titles, descriptions, and tags.
 *   **Advanced Artwork & Digital Asset Management:** Artists can upload their portfolios and list existing NFTs for sale.
 *   **Web3 Integration:** Secure, peer-to-peer transactions for artwork sales and booking deposits using cryptocurrency on a configurable network (Polygon or Amoy testnet).
 *   **Booking & Scheduling System:** Clients can book appointments with artists, who can manage their requests and availability settings through a dedicated dashboard.

@@ -180,7 +180,7 @@ export default function SignupForm() {
             role: formData.role,
             status: status,
             bio: "", // Will be filled in by AI
-            avatarUrl: "", // Will be filled in by AI
+            avatarUrl: "https://placehold.co/200x200.png",
             backgroundUrl: '',
             walletAddress: "",
             onboardingComplete: false, // Mark as incomplete for now
@@ -249,7 +249,7 @@ export default function SignupForm() {
     try {
       const userRef = dbRef(database, `users/${user.uid}`);
       
-      let avatarUrl = '';
+      let avatarUrl = 'https://placehold.co/200x200.png';
       if (profileImageUri) {
           const moderationResult = await moderateImage({ photoDataUri: profileImageUri });
           if (!moderationResult.isSafe) {
@@ -269,7 +269,7 @@ export default function SignupForm() {
       
       await update(userRef, {
         bio: aiResult.bio,
-        avatarUrl: avatarUrl, // Save the storage URL
+        avatarUrl: avatarUrl, // Save the storage URL or default placeholder
         onboardingComplete: true,
       });
 
@@ -340,7 +340,7 @@ export default function SignupForm() {
           {step === 1 && "Create your account to get started."}
           {step === 2 && `We've sent a verification link to ${formData.email}.`}
           {step === 3 && "Tell us a bit about yourself."}
-          {step === 4 && "Let's personalize your profile with our AI assistant."}
+          {step === 4 && "Set up your bio and choose an optional profile picture."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -415,7 +415,7 @@ export default function SignupForm() {
             <div className="flex flex-col items-center gap-4">
               <Label htmlFor="profile-image-upload" className="cursor-pointer">
                 <Avatar className="h-32 w-32 border-4 border-primary shadow-lg hover:opacity-80 transition-opacity">
-                  <AvatarImage src={profileImageUri || ""} alt="Profile Image" />
+                  <AvatarImage src={profileImageUri || "https://placehold.co/200x200.png"} alt="Profile Image" />
                   <AvatarFallback><UserIcon className="h-16 w-16" /></AvatarFallback>
                 </Avatar>
               </Label>
@@ -427,8 +427,14 @@ export default function SignupForm() {
                 onChange={handleImageChange} 
               />
               <Label htmlFor="profile-image-upload" className="cursor-pointer text-sm font-medium text-primary hover:underline">
-                Upload Profile Picture
+                {profileImageUri ? "Change Profile Picture" : "Upload Profile Picture (Optional)"}
               </Label>
+              <p className="text-xs text-muted-foreground">A default picture is assigned if you do not upload one.</p>
+              {profileImageUri && (
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-destructive" onClick={() => setProfileImageUri(null)}>
+                  Remove picture
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleGenerateContent} disabled={loading}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 Regenerate Bio

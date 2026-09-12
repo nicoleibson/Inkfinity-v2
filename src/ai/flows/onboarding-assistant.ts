@@ -2,9 +2,9 @@
 // src/ai/flows/onboarding-assistant.ts
 'use server';
 /**
- * @fileOverview Provides a function to generate onboarding content (bio, avatar) for new users via an AI agent.
+ * @fileOverview Provides a function to generate onboarding content (bio) for new users via an AI agent.
  *
- * - generateOnboardingContent - A function that generates a professional bio and avatar for new users.
+ * - generateOnboardingContent - A function that generates a professional bio for new users.
  * - GenerateOnboardingContentInput - The input type for the generateOnboardingContent function.
  * - GenerateOnboardingContentOutput - The return type for the generateOnboardingContent function.
  */
