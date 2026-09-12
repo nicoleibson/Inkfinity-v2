@@ -30,7 +30,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Inkfinity",
   description: "A platform for tattoo artists and enthusiasts.",
-  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -38,7 +37,6 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
   }
 };
 
