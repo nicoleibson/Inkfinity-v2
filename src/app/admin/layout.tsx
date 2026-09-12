@@ -12,7 +12,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Shield, Server, Users, Gavel, Award } from 'lucide-react';
+import { Shield, Server, Users, Gavel, Award, Database } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useUserSession } from '@/hooks/useUserSession';
@@ -63,6 +63,7 @@ export default function AdminLayout({
     { href: '/admin/users', label: 'Users', icon: Users, roles: ['Administrator', 'Super-Administrator'] },
     { href: '/admin/moderation', label: 'Moderation', icon: Gavel, roles: ['Super-Administrator'] },
     { href: '/admin/referrals', label: 'My Referrals', icon: Award, roles: ['Administrator'] },
+    { href: '/admin/cleanup', label: 'DB Cleanup', icon: Database, roles: ['Administrator', 'Super-Administrator'] },
   ];
 
   if (loading) {

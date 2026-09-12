@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePlatformSettings } from '@/hooks/usePlatformSettings';
-import { Loader2, Save, Server, Wifi, WifiOff, ShieldAlert, Gem, RefreshCcw, Award } from 'lucide-react';
+import { Loader2, Save, Server, Wifi, WifiOff, ShieldAlert, Gem, RefreshCcw, Award, Database } from 'lucide-react';
+import Link from 'next/link';
 import {
   Select,
   SelectContent,
@@ -315,6 +316,23 @@ export default function AdminPanel() {
                  <Button onClick={handleSyncNfts} disabled={isSyncing} variant="outline">
                     {isSyncing ? <Loader2 className="animate-spin" /> : <RefreshCcw />}
                      {isSyncing ? 'Syncing...' : 'Sync NFT Ownership'}
+                </Button>
+            </div>
+          </Card>
+          <Card className="p-4 border-primary/20 bg-primary/5">
+            <h3 className="text-md font-medium flex items-center gap-2 mb-2 text-primary">
+                <Database className="h-5 w-5" />
+                Database Cleanup & Maintenance
+            </h3>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                    Purge obsolete data, heavy Base64 avatars, and stale username aliases in Firebase.
+                </p>
+                <Button asChild variant="default" className="bg-primary hover:bg-primary/90">
+                    <Link href="/admin/cleanup">
+                        <Database className="mr-2 h-4 w-4" />
+                        Open DB Cleanup
+                    </Link>
                 </Button>
             </div>
           </Card>
