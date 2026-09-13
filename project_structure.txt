@@ -19,6 +19,7 @@ Este documento es el plano maestro de la aplicación Inkfinity. Describe la estr
 ## 2. Estructura del Directorio Raíz
 
 - **`src/`**: Contiene todo el código fuente de la aplicación. Es el directorio principal de desarrollo.
+- **`cleanup-script.mjs` / `run-cleanup.sh`**: Scripts ejecutables desde terminal para limpieza y purga de base de datos offline.
 - **`docs/`**: Documentación de alto nivel sobre seguridad, configuración, despliegue e integraciones (`DEPLOYMENT.md`, `SECURITY.md`, `SETUP.md`, `TROUBLESHOOTING.md`, `ADVANCED_INTEGRATIONS.md`, `blueprint.md`).
 - **`public/`**: Archivos estáticos accesibles públicamente.
   - **`public/models/`**: Modelos de visión por computador usados en el navegador: `face-detector.tflite` (MediaPipe FaceDetector), `face_landmarker.task` (FaceLandmarker), `mediapipe/` (WASM) y `face-api/` (tiny_face_detector, face_landmark_68, face_recognition).

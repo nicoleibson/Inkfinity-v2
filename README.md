@@ -24,7 +24,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Web3 Integration:** Secure, peer-to-peer transactions for artwork sales and booking deposits using cryptocurrency on a configurable network (Polygon or Amoy testnet).
 *   **Booking & Scheduling System:** Clients can book appointments with artists, who can manage their requests and availability settings through a dedicated dashboard.
 *   **Direct User-to-User Chat:** Real-time messaging for seamless communication between all user types.
-*   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings, and moderate content.
+*   **Comprehensive Admin *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings, and moderate content. Moderation Panel:** Tools for administrators to manage users, configure platform settings, and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
 *   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. Optional **facial scan 2FA** uses a multi-layer chain: client-side face detection (MediaPipe), liveness detection (blink + head motion), deterministic face embeddings (face-api), a 3-frame AI comparison with confidence scoring (Genkit/Gemini), escalating rate limiting, and an email-link fallback.
 
 ## Tech Stack
