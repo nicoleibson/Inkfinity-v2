@@ -21,6 +21,7 @@ import { ref as dbRef, set, update, get } from "firebase/database";
 import { add } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadDataUri } from '@/lib/firebase/storage';
+import { uploadProfileImageToGoogleDrive, getCachedDriveAccessToken } from '@/lib/google-drive';
 
 export default function SignupForm() {
   const [step, setStep] = useState(1);
@@ -250,6 +251,9 @@ export default function SignupForm() {
       const userRef = dbRef(database, `users/${user.uid}`);
       
       let avatarUrl = 'https://placehold.co/200x200.png';
+      let driveFolderId: string | null = null;
+      let driveFileId: string | null = null;
+
       if (profileImageUri) {
           const moderationResult = await moderateImage({ photoDataUri: profileImageUri });
           if (!moderationResult.isSafe) {
@@ -262,16 +266,47 @@ export default function SignupForm() {
               return;
           }
           
-          // Upload avatar to storage
-          const avatarPath = `profiles/${user.uid}/avatar.jpg`;
-          avatarUrl = await uploadDataUri(avatarPath, profileImageUri);
+          // Upload avatar (prefer Google Drive if connected, fallback to storage)
+          let driveSuccess = false;
+          const driveToken = getCachedDriveAccessToken();
+
+          if (driveToken) {
+            try {
+              const driveRes = await uploadProfileImageToGoogleDrive(
+                driveToken,
+                user.uid,
+                'avatar',
+                profileImageUri
+              );
+              avatarUrl = driveRes.imageUrl;
+              driveFolderId = driveRes.folderId;
+              driveFileId = driveRes.fileId;
+              driveSuccess = true;
+            } catch (dErr) {
+              console.warn("Drive upload failed during signup, using storage:", dErr);
+            }
+          }
+
+          if (!driveSuccess) {
+            const avatarPath = `profiles/${user.uid}/avatar.jpg`;
+            avatarUrl = await uploadDataUri(avatarPath, profileImageUri);
+          }
       }
       
-      await update(userRef, {
+      const userUpdates: Record<string, any> = {
         bio: aiResult.bio,
         avatarUrl: avatarUrl, // Save the storage URL or default placeholder
         onboardingComplete: true,
-      });
+      };
+
+      if (driveFolderId) {
+        userUpdates.googleDriveFolderId = driveFolderId;
+      }
+      if (driveFileId) {
+        userUpdates.avatarDriveFileId = driveFileId;
+      }
+
+      await update(userRef, userUpdates);
 
       // Update Firebase Auth profile as well
       await updateProfile(user, { photoURL: avatarUrl });

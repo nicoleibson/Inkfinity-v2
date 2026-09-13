@@ -59,6 +59,9 @@ export interface UserProfile {
     facialAttempts?: { failed: number; lockedUntil: number | null } | null;
     artistRequestStatus?: 'none' | 'pending' | 'approved' | 'rejected';
     trialEndsAt?: string | null;
+    googleDriveFolderId?: string | null;
+    avatarDriveFileId?: string | null;
+    backgroundDriveFileId?: string | null;
     'my-bookings'?: { [key: string]: boolean };
     bookings?: { [key: string]: boolean };
     notifications?: { [key: string]: Notification };

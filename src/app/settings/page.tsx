@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send } from 'lucide-react';
+import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { verifyFace } from '@/ai/flows/verify-face-flow';
@@ -43,6 +43,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { uploadDataUri } from '@/lib/firebase/storage';
+import { uploadProfileImageToGoogleDrive, authorizeGoogleDrive, getCachedDriveAccessToken, getDriveFolderUrl } from '@/lib/google-drive';
 import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
 
 export default function SettingsPage() {
@@ -65,6 +66,8 @@ export default function SettingsPage() {
   const [backgroundFile, setBackgroundFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const [backgroundPreview, setBackgroundPreview] = React.useState<string | null>(null);
+  const [isConnectingDrive, setIsConnectingDrive] = React.useState(false);
+  const [driveConnected, setDriveConnected] = React.useState<boolean>(false);
   
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
 
@@ -77,6 +80,36 @@ export default function SettingsPage() {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
   const { walletAddress, disconnectWallet, isConnected, connectWallet } = useWallet();
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = getCachedDriveAccessToken();
+      if (token) setDriveConnected(true);
+    }
+  }, []);
+
+  const handleConnectDrive = async () => {
+    setIsConnectingDrive(true);
+    try {
+      const token = await authorizeGoogleDrive();
+      if (token) {
+        setDriveConnected(true);
+        toast({
+          title: "Google Drive Vinculado",
+          description: "Tus fotos de perfil y obras se guardarán en tu carpeta pública 'Inkfinity Artworks'.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Error vinculando Google Drive:", err);
+      toast({
+        variant: "destructive",
+        title: "Error al vincular Google Drive",
+        description: err?.message || "No se pudo autorizar Google Drive.",
+      });
+    } finally {
+      setIsConnectingDrive(false);
+    }
+  };
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -230,17 +263,82 @@ export default function SettingsPage() {
       updates[`/users/${currentUser.uid}/location`] = profile.location || null;
       updates[`/users/${currentUser.uid}/locationName`] = profile.locationName || null;
 
+      let driveToken = getCachedDriveAccessToken();
+      const existingFolderId = profile.googleDriveFolderId || undefined;
+
       if (avatarFile && avatarPreview) {
-        const avatarPath = `profiles/${currentUser.uid}/avatar.jpg`;
-        const avatarUrl = await uploadDataUri(avatarPath, avatarPreview);
-        updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
+        let avatarUrl = '';
+        let driveSuccess = false;
+
+        // Prefer Google Drive upload to the user's unified Inkfinity folder
+        try {
+          if (!driveToken) {
+            driveToken = await authorizeGoogleDrive();
+            setDriveConnected(true);
+          }
+          if (driveToken) {
+            const driveRes = await uploadProfileImageToGoogleDrive(
+              driveToken,
+              currentUser.uid,
+              'avatar',
+              avatarPreview,
+              existingFolderId
+            );
+            avatarUrl = driveRes.imageUrl;
+            updates[`/users/${currentUser.uid}/googleDriveFolderId`] = driveRes.folderId;
+            updates[`/users/${currentUser.uid}/avatarDriveFileId`] = driveRes.fileId;
+            updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
+            setProfile(prev => ({ ...prev, googleDriveFolderId: driveRes.folderId, avatarDriveFileId: driveRes.fileId, avatarUrl }));
+            driveSuccess = true;
+          }
+        } catch (driveErr) {
+          console.warn("Google Drive upload for avatar failed/cancelled, falling back to storage:", driveErr);
+        }
+
+        if (!driveSuccess) {
+          const avatarPath = `profiles/${currentUser.uid}/avatar.jpg`;
+          avatarUrl = await uploadDataUri(avatarPath, avatarPreview);
+          updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
+        }
+
         await updateAuthProfile(currentUser, { photoURL: avatarUrl });
       }
 
       if (backgroundFile && backgroundPreview) {
-        const backgroundPath = `profiles/${currentUser.uid}/background.jpg`;
-        const backgroundUrl = await uploadDataUri(backgroundPath, backgroundPreview);
-        updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
+        let backgroundUrl = '';
+        let driveSuccess = false;
+
+        // Prefer Google Drive upload to the user's unified Inkfinity folder
+        try {
+          if (!driveToken) {
+            driveToken = await authorizeGoogleDrive();
+            setDriveConnected(true);
+          }
+          if (driveToken) {
+            const targetFolderId = (updates[`/users/${currentUser.uid}/googleDriveFolderId`] as string) || existingFolderId;
+            const driveRes = await uploadProfileImageToGoogleDrive(
+              driveToken,
+              currentUser.uid,
+              'background',
+              backgroundPreview,
+              targetFolderId
+            );
+            backgroundUrl = driveRes.imageUrl;
+            updates[`/users/${currentUser.uid}/googleDriveFolderId`] = driveRes.folderId;
+            updates[`/users/${currentUser.uid}/backgroundDriveFileId`] = driveRes.fileId;
+            updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
+            setProfile(prev => ({ ...prev, googleDriveFolderId: driveRes.folderId, backgroundDriveFileId: driveRes.fileId, backgroundUrl }));
+            driveSuccess = true;
+          }
+        } catch (driveErr) {
+          console.warn("Google Drive upload for background failed/cancelled, falling back to storage:", driveErr);
+        }
+
+        if (!driveSuccess) {
+          const backgroundPath = `profiles/${currentUser.uid}/background.jpg`;
+          backgroundUrl = await uploadDataUri(backgroundPath, backgroundPreview);
+          updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
+        }
       }
 
       await update(ref(database), updates);
@@ -700,6 +798,76 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-6">
+                    {/* Google Drive Storage Status Card */}
+                    <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+                            <HardDrive className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold text-sm">Almacenamiento en Google Drive</h4>
+                              {profile.googleDriveFolderId || driveConnected ? (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-medium border border-emerald-500/20">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Vinculado
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                                  No vinculado
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Tus fotos de perfil, imágenes de portada y obras se almacenan en tu propia carpeta pública <span className="font-medium text-foreground">Inkfinity Artworks</span>.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {profile.googleDriveFolderId && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-xs gap-1.5"
+                              asChild
+                            >
+                              <a
+                                href={getDriveFolderUrl(profile.googleDriveFolderId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Ver carpeta
+                              </a>
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant={profile.googleDriveFolderId || driveConnected ? "outline" : "default"}
+                            size="sm"
+                            className="text-xs gap-1.5"
+                            onClick={handleConnectDrive}
+                            disabled={isConnectingDrive}
+                          >
+                            {isConnectingDrive ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Conectando...
+                              </>
+                            ) : (
+                              <>
+                                <Cloud className="h-3.5 w-3.5" />
+                                {profile.googleDriveFolderId || driveConnected ? 'Reconectar Drive' : 'Vincular Google Drive'}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-6 items-start">
                         <div className="space-y-2">
                           <Label>Profile Picture</Label>

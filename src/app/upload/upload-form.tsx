@@ -377,7 +377,8 @@ export default function UploadForm() {
             const driveRes = await uploadArtworkToGoogleDrive(
               driveToken,
               `${artworkDetails.title || 'obra'}_${artworkId}.jpg`,
-              watermarkedImageDataUri
+              watermarkedImageDataUri,
+              currentUserProfile?.googleDriveFolderId || undefined
             );
 
             imageUrl = driveRes.imageUrl;
@@ -387,6 +388,18 @@ export default function UploadForm() {
             googleDriveFolderId = driveRes.folderId;
             googleDriveViewUrl = driveRes.webViewLink;
             driveSuccess = true;
+
+            // Save googleDriveFolderId in user's profile if not set yet
+            if (driveRes.folderId && !currentUserProfile?.googleDriveFolderId) {
+              try {
+                const { update: dbUpdate, ref: dbRef } = await import('firebase/database');
+                await dbUpdate(dbRef(database, `users/${user.uid}`), {
+                  googleDriveFolderId: driveRes.folderId,
+                });
+              } catch (updateErr) {
+                console.warn('Could not update user googleDriveFolderId:', updateErr);
+              }
+            }
           }
         } catch (driveErr: any) {
           console.warn('Google Drive notice, using safe fallback:', driveErr);
