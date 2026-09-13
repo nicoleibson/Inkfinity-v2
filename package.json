@@ -9,7 +9,9 @@
     "build": "NODE_OPTIONS='--max-old-space-size=1536' next build",
     "start": "next start -p 3000 -H 0.0.0.0",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "purge": "node scripts/purge-db.mjs",
+    "purge:execute": "node scripts/purge-db.mjs --execute"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "1.28.0",
@@ -38,13 +40,9 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@reown/appkit": "^1.8.23",
     "@reown/appkit-adapter-ethers": "^1.8.23",
-    "@types/glob": "^8.1.0",
-    "@x402/core": "^2.25.0",
-    "@x402/evm": "^2.25.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
-    "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.1.6",
     "ethers": "^6.17.0",
     "firebase": "^12.6.0",
@@ -55,7 +53,6 @@
     "lucide-react": "^0.481.0",
     "next": "^15.5.9",
     "next-themes": "^0.3.0",
-    "patch-package": "^8.0.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
