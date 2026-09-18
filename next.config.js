@@ -7,11 +7,16 @@ const nextConfig = {
       config.devtool = false;
     }
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
-    // @coinbase/cdp-sdk (transitively pulled by @reown/appkit-adapter-ethers) does
-    // optional dynamic imports of @x402/* client entry points. Stub them out;
-    // they are lazy and unused by this app.
+    // @coinbase/cdp-sdk and @base-org/account are transitively and optionally pulled
+    // by @reown/appkit-adapter-ethers. They are unused by Inkfinity and pull in
+    // massive Solana/CDP module trees that overwhelm dev memory.
     config.resolve.alias = {
       ...config.resolve.alias,
+      '@coinbase/cdp-sdk': false,
+      '@base-org/account': false,
+      '@solana/web3.js': false,
+      '@solana/kit': false,
+      '@solana/rpc': false,
       '@x402/core/client': false,
       '@x402/evm/exact/client': false,
       '@x402/evm/upto/client': false,
