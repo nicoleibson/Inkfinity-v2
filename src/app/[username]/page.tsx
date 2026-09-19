@@ -358,7 +358,14 @@ export default function UserProfilePage() {
         <motion.div variants={tabVariants}>
         <Card className="overflow-hidden border border-primary/10 shadow-lg hover:shadow-2xl hover:shadow-primary/10 transition-shadow duration-300">
           <div className="h-48 md:h-64 bg-card-foreground/10 relative overflow-hidden">
-            <Image src={profileUser.backgroundUrl || "https://placehold.co/1200x400.png"} data-ai-hint="abstract texture" alt="Banner" fill className="object-cover transition-transform duration-700 hover:scale-105" />
+            <Image
+              src={profileUser.backgroundUrl || "https://placehold.co/1200x400.png"}
+              data-ai-hint="abstract texture"
+              alt="Banner"
+              fill
+              className="object-cover transition-transform duration-700 hover:scale-105"
+              unoptimized={Boolean(profileUser.backgroundUrl && (profileUser.backgroundUrl.startsWith('/uploads') || profileUser.backgroundUrl.startsWith('data:') || profileUser.backgroundUrl.includes('lh3.googleusercontent.com')))}
+            />
           </div>
           <div className="p-6 pt-0">
             <div className="flex flex-col items-center md:flex-row md:items-end gap-6 -mt-20 transform md:-translate-y-1/2">

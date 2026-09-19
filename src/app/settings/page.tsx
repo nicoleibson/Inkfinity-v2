@@ -43,7 +43,14 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { uploadDataUri } from '@/lib/firebase/storage';
-import { uploadProfileImageToGoogleDrive, authorizeGoogleDrive, getCachedDriveAccessToken, getDriveFolderUrl } from '@/lib/google-drive';
+import {
+  uploadProfileImageToGoogleDrive,
+  authorizeGoogleDrive,
+  getCachedDriveAccessToken,
+  clearDriveAccessToken,
+  getDriveFolderUrl,
+  deleteOldUserMedia,
+} from '@/lib/google-drive';
 import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
 
 export default function SettingsPage() {
@@ -83,20 +90,34 @@ export default function SettingsPage() {
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const token = getCachedDriveAccessToken();
-      if (token) setDriveConnected(true);
+      const email = currentUser?.email || profile.email;
+      if (email) {
+        const token = getCachedDriveAccessToken(email);
+        setDriveConnected(Boolean(token));
+      } else {
+        setDriveConnected(false);
+      }
     }
-  }, []);
+  }, [currentUser?.email, profile.email]);
 
   const handleConnectDrive = async () => {
+    const userEmail = currentUser?.email || profile.email;
+    if (!userEmail) {
+      toast({
+        variant: "destructive",
+        title: "Correo no disponible",
+        description: "No se encontró el correo electrónico registrado de tu cuenta de Inkfinity.",
+      });
+      return;
+    }
     setIsConnectingDrive(true);
     try {
-      const token = await authorizeGoogleDrive();
+      const token = await authorizeGoogleDrive(userEmail);
       if (token) {
         setDriveConnected(true);
         toast({
           title: "Google Drive Vinculado",
-          description: "Tus fotos de perfil y obras se guardarán en tu carpeta pública 'Inkfinity Artworks'.",
+          description: `Tu cuenta (${userEmail}) ha sido vinculada correctamente. Tus fotos de perfil y obras se guardarán en tu propia carpeta 'Inkfinity Artworks'.`,
         });
       }
     } catch (err: any) {
@@ -109,6 +130,16 @@ export default function SettingsPage() {
     } finally {
       setIsConnectingDrive(false);
     }
+  };
+
+  const handleDisconnectDrive = () => {
+    const userEmail = currentUser?.email || profile.email;
+    clearDriveAccessToken(userEmail);
+    setDriveConnected(false);
+    toast({
+      title: "Google Drive Desvinculado",
+      description: "Se ha cerrado la sesión de Google Drive en este dispositivo.",
+    });
   };
 
   React.useEffect(() => {
@@ -263,17 +294,21 @@ export default function SettingsPage() {
       updates[`/users/${currentUser.uid}/location`] = profile.location || null;
       updates[`/users/${currentUser.uid}/locationName`] = profile.locationName || null;
 
-      let driveToken = getCachedDriveAccessToken();
+      const userEmail = currentUser.email || profile.email;
+      let driveToken = userEmail ? getCachedDriveAccessToken(userEmail) : null;
       const existingFolderId = profile.googleDriveFolderId || undefined;
 
       if (avatarFile && avatarPreview) {
+        const oldAvatarUrl = profile.avatarUrl;
+        const oldAvatarDriveFileId = profile.avatarDriveFileId;
         let avatarUrl = '';
         let driveSuccess = false;
+        let newAvatarDriveFileId: string | null = null;
 
         // Prefer Google Drive upload to the user's unified Inkfinity folder
         try {
-          if (!driveToken) {
-            driveToken = await authorizeGoogleDrive();
+          if (!driveToken && userEmail) {
+            driveToken = await authorizeGoogleDrive(userEmail);
             setDriveConnected(true);
           }
           if (driveToken) {
@@ -285,33 +320,62 @@ export default function SettingsPage() {
               existingFolderId
             );
             avatarUrl = driveRes.imageUrl;
+            newAvatarDriveFileId = driveRes.fileId;
             updates[`/users/${currentUser.uid}/googleDriveFolderId`] = driveRes.folderId;
             updates[`/users/${currentUser.uid}/avatarDriveFileId`] = driveRes.fileId;
             updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
-            setProfile(prev => ({ ...prev, googleDriveFolderId: driveRes.folderId, avatarDriveFileId: driveRes.fileId, avatarUrl }));
             driveSuccess = true;
           }
-        } catch (driveErr) {
+        } catch (driveErr: any) {
           console.warn("Google Drive upload for avatar failed/cancelled, falling back to storage:", driveErr);
+          if (driveErr?.message?.includes('no coincide')) {
+            toast({
+              variant: "destructive",
+              title: "Cuenta de Google no válida",
+              description: driveErr.message,
+            });
+          }
         }
 
         if (!driveSuccess) {
-          const avatarPath = `profiles/${currentUser.uid}/avatar.jpg`;
+          // Unique path with timestamp to prevent routing conflicts and stale cache
+          const avatarPath = `profiles/${currentUser.uid}/avatar_${Date.now()}.jpg`;
           avatarUrl = await uploadDataUri(avatarPath, avatarPreview);
           updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
+          // Clean up any stale Drive file ID in database
+          updates[`/users/${currentUser.uid}/avatarDriveFileId`] = null;
         }
+
+        // Delete old avatar image from storage (Google Drive and/or local storage)
+        await deleteOldUserMedia({
+          oldUrl: oldAvatarUrl,
+          oldDriveFileId: oldAvatarDriveFileId,
+          accessToken: driveToken,
+        });
+
+        setProfile((prev) => ({
+          ...prev,
+          avatarUrl,
+          avatarDriveFileId: newAvatarDriveFileId,
+          ...(driveSuccess && updates[`/users/${currentUser.uid}/googleDriveFolderId`]
+            ? { googleDriveFolderId: updates[`/users/${currentUser.uid}/googleDriveFolderId`] }
+            : {}),
+        }));
 
         await updateAuthProfile(currentUser, { photoURL: avatarUrl });
       }
 
       if (backgroundFile && backgroundPreview) {
+        const oldBackgroundUrl = profile.backgroundUrl;
+        const oldBackgroundDriveFileId = profile.backgroundDriveFileId;
         let backgroundUrl = '';
         let driveSuccess = false;
+        let newBackgroundDriveFileId: string | null = null;
 
         // Prefer Google Drive upload to the user's unified Inkfinity folder
         try {
-          if (!driveToken) {
-            driveToken = await authorizeGoogleDrive();
+          if (!driveToken && userEmail) {
+            driveToken = await authorizeGoogleDrive(userEmail);
             setDriveConnected(true);
           }
           if (driveToken) {
@@ -324,21 +388,47 @@ export default function SettingsPage() {
               targetFolderId
             );
             backgroundUrl = driveRes.imageUrl;
+            newBackgroundDriveFileId = driveRes.fileId;
             updates[`/users/${currentUser.uid}/googleDriveFolderId`] = driveRes.folderId;
             updates[`/users/${currentUser.uid}/backgroundDriveFileId`] = driveRes.fileId;
             updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
-            setProfile(prev => ({ ...prev, googleDriveFolderId: driveRes.folderId, backgroundDriveFileId: driveRes.fileId, backgroundUrl }));
             driveSuccess = true;
           }
-        } catch (driveErr) {
+        } catch (driveErr: any) {
           console.warn("Google Drive upload for background failed/cancelled, falling back to storage:", driveErr);
+          if (driveErr?.message?.includes('no coincide')) {
+            toast({
+              variant: "destructive",
+              title: "Cuenta de Google no válida",
+              description: driveErr.message,
+            });
+          }
         }
 
         if (!driveSuccess) {
-          const backgroundPath = `profiles/${currentUser.uid}/background.jpg`;
+          // Unique path with timestamp to prevent routing conflicts and stale cache
+          const backgroundPath = `profiles/${currentUser.uid}/background_${Date.now()}.jpg`;
           backgroundUrl = await uploadDataUri(backgroundPath, backgroundPreview);
           updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
+          // Clean up any stale Drive file ID in database
+          updates[`/users/${currentUser.uid}/backgroundDriveFileId`] = null;
         }
+
+        // Delete old background image from storage (Google Drive and/or local storage)
+        await deleteOldUserMedia({
+          oldUrl: oldBackgroundUrl,
+          oldDriveFileId: oldBackgroundDriveFileId,
+          accessToken: driveToken,
+        });
+
+        setProfile((prev) => ({
+          ...prev,
+          backgroundUrl,
+          backgroundDriveFileId: newBackgroundDriveFileId,
+          ...(driveSuccess && updates[`/users/${currentUser.uid}/googleDriveFolderId`]
+            ? { googleDriveFolderId: updates[`/users/${currentUser.uid}/googleDriveFolderId`] }
+            : {}),
+        }));
       }
 
       await update(ref(database), updates);
@@ -820,7 +910,12 @@ export default function SettingsPage() {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Tus fotos de perfil, imágenes de portada y obras se almacenan en tu propia carpeta pública <span className="font-medium text-foreground">Inkfinity Artworks</span>.
+                              Tus fotos de perfil, imágenes de portada y obras se almacenan en tu propia cuenta personal de Google Drive.
+                              {currentUser?.email && (
+                                <span className="block mt-1 text-[11px] text-muted-foreground/80">
+                                  Correo verificado de tu cuenta: <span className="font-mono text-foreground font-medium">{currentUser.email}</span>
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -842,6 +937,17 @@ export default function SettingsPage() {
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 Ver carpeta
                               </a>
+                            </Button>
+                          )}
+                          {driveConnected && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={handleDisconnectDrive}
+                            >
+                              Desvincular
                             </Button>
                           )}
                           <Button
@@ -878,6 +984,7 @@ export default function SettingsPage() {
                                width={128}
                                height={128}
                                className="rounded-full object-cover w-32 h-32 border-2 border-primary bg-muted"
+                               unoptimized
                              />
                              <Label htmlFor="avatarFile" className="absolute bottom-0 right-0 bg-secondary text-secondary-foreground p-2 rounded-full cursor-pointer hover:bg-primary">
                                 <Upload className="h-4 w-4" />
@@ -893,6 +1000,7 @@ export default function SettingsPage() {
                                alt="Background"
                                fill
                                className="rounded-md object-cover border-2 border-muted"
+                               unoptimized
                              />
                              <Label htmlFor="backgroundFile" className="absolute bottom-2 right-2 bg-secondary text-secondary-foreground p-2 rounded-full cursor-pointer hover:bg-primary">
                                 <Upload className="h-4 w-4" />

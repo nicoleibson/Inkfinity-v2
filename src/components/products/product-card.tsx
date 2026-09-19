@@ -16,7 +16,18 @@ export function ProductCard({ product }: ProductCardProps) {
     <Card className="overflow-hidden transition-all duration-300 hover:border-primary/60 hover:shadow-lg hover:-translate-y-1 h-full flex flex-col">
       <CardHeader>
           <div className="aspect-video relative mb-4">
-              <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'cover' }} className="rounded-md" />
+              <Image
+                src={product.imageUrl}
+                alt={product.name}
+                fill
+                style={{ objectFit: 'cover' }}
+                className="rounded-md"
+                unoptimized={
+                  product.imageUrl.startsWith('data:') ||
+                  product.imageUrl.includes('lh3.googleusercontent.com') ||
+                  product.imageUrl.startsWith('/uploads')
+                }
+              />
           </div>
           <CardTitle className="font-headline text-lg">{product.name}</CardTitle>
           <CardDescription>{product.category}</CardDescription>

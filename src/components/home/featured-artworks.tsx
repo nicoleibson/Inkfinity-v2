@@ -103,6 +103,11 @@ export function FeaturedArtworks() {
                          fill 
                          onError={() => setImageError(true)}
                          className="object-contain transition-transform duration-500 group-hover:scale-105" 
+                         unoptimized={
+                             artwork.imageUrl.startsWith('data:') ||
+                             artwork.imageUrl.includes('lh3.googleusercontent.com') ||
+                             artwork.imageUrl.startsWith('/uploads')
+                         }
                      />
                  ) : (
                      <div className="flex flex-col items-center gap-2 text-muted-foreground/60 p-4 text-center">

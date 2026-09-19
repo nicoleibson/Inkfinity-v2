@@ -514,7 +514,11 @@ export default function ArtworkDetailPage() {
               fill
               onError={() => setImageError(true)}
               className="object-contain"
-              unoptimized={artwork.imageUrl.startsWith('data:') || artwork.imageUrl.includes('lh3.googleusercontent.com')}
+              unoptimized={
+                artwork.imageUrl.startsWith('data:') ||
+                artwork.imageUrl.includes('lh3.googleusercontent.com') ||
+                artwork.imageUrl.startsWith('/uploads')
+              }
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-muted text-muted-foreground gap-3">

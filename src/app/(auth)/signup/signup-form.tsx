@@ -266,9 +266,9 @@ export default function SignupForm() {
               return;
           }
           
-          // Upload avatar (prefer Google Drive if connected, fallback to storage)
+          // Upload avatar (prefer Google Drive if connected for this specific email, fallback to storage)
           let driveSuccess = false;
-          const driveToken = getCachedDriveAccessToken();
+          const driveToken = getCachedDriveAccessToken(formValues.email);
 
           if (driveToken) {
             try {
@@ -288,7 +288,7 @@ export default function SignupForm() {
           }
 
           if (!driveSuccess) {
-            const avatarPath = `profiles/${user.uid}/avatar.jpg`;
+            const avatarPath = `profiles/${user.uid}/avatar_${Date.now()}.jpg`;
             avatarUrl = await uploadDataUri(avatarPath, profileImageUri);
           }
       }

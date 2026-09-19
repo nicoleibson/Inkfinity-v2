@@ -138,7 +138,11 @@ export default function ArtworkCard({ artwork, currentUserProfile }: ArtworkCard
                   className="transition-transform duration-300 group-hover:scale-105"
                   style={{ objectFit: "contain" }}
                   data-ai-hint={artwork.dataAiHint}
-                  unoptimized={artwork.imageUrl.startsWith('data:') || artwork.imageUrl.includes('lh3.googleusercontent.com')}
+                  unoptimized={
+                    artwork.imageUrl.startsWith('data:') ||
+                    artwork.imageUrl.includes('lh3.googleusercontent.com') ||
+                    artwork.imageUrl.startsWith('/uploads')
+                  }
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-muted/60 text-muted-foreground gap-2">

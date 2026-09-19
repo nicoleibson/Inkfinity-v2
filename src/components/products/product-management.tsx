@@ -204,7 +204,18 @@ export default function ProductManagement() {
                         <Card key={product.id}>
                             <CardHeader>
                                 <div className="aspect-video relative mb-4">
-                                     <Image src={product.imageUrl} alt={product.name} fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                                     <Image
+                                         src={product.imageUrl}
+                                         alt={product.name}
+                                         fill
+                                         style={{ objectFit: 'cover' }}
+                                         className="rounded-md"
+                                         unoptimized={
+                                             product.imageUrl.startsWith('data:') ||
+                                             product.imageUrl.includes('lh3.googleusercontent.com') ||
+                                             product.imageUrl.startsWith('/uploads')
+                                         }
+                                     />
                                 </div>
                                 <CardTitle>{product.name}</CardTitle>
                                 <CardDescription>{product.category}</CardDescription>

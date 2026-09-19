@@ -128,16 +128,32 @@ export default function UploadForm() {
   const router = useRouter();
 
   const handleConnectDrive = async () => {
+    const userEmail = currentUserProfile?.email || auth.currentUser?.email;
+    if (!userEmail) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Debes contar con un correo registrado en tu cuenta para conectar Google Drive.',
+      });
+      return;
+    }
     setIsConnectingDrive(true);
     try {
-      const token = await authorizeGoogleDrive();
+      const token = await authorizeGoogleDrive(userEmail);
       if (token) {
         setDriveConnected(true);
-        toast({ title: 'Google Drive Conectado', description: 'Tus obras normales se guardarán en tu carpeta pública "Inkfinity Artworks".' });
+        toast({
+          title: 'Google Drive Conectado',
+          description: `Vinculado a tu cuenta (${userEmail}). Tus obras se guardarán en tu propia carpeta "Inkfinity Artworks".`,
+        });
       }
     } catch (err: any) {
       console.error('Error connecting Google Drive:', err);
-      toast({ variant: 'destructive', title: 'Error al conectar Google Drive', description: err.message || 'No se pudo autorizar Google Drive.' });
+      toast({
+        variant: 'destructive',
+        title: 'Error al conectar Google Drive',
+        description: err.message || 'No se pudo autorizar Google Drive.',
+      });
     } finally {
       setIsConnectingDrive(false);
     }
@@ -145,6 +161,13 @@ export default function UploadForm() {
 
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (currentUserProfile?.email) {
+      const token = getCachedDriveAccessToken(currentUserProfile.email);
+      setDriveConnected(Boolean(token));
+    }
+  }, [currentUserProfile?.email]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -364,11 +387,12 @@ export default function UploadForm() {
       } else {
         // Opción 1: Google Drive para obras normales
         let driveSuccess = false;
+        const userEmail = currentUserProfile?.email || user.email;
         try {
-          let driveToken = getCachedDriveAccessToken();
-          if (!driveToken) {
-            toast({ title: 'Conectando con Google Drive...', description: 'Autorizando carpeta pública en tu cuenta de Google.' });
-            driveToken = await authorizeGoogleDrive();
+          let driveToken = userEmail ? getCachedDriveAccessToken(userEmail) : null;
+          if (!driveToken && userEmail) {
+            toast({ title: 'Conectando con Google Drive...', description: `Autorizando con tu correo registrado (${userEmail})...` });
+            driveToken = await authorizeGoogleDrive(userEmail);
             setDriveConnected(true);
           }
 
@@ -403,10 +427,18 @@ export default function UploadForm() {
           }
         } catch (driveErr: any) {
           console.warn('Google Drive notice, using safe fallback:', driveErr);
-          toast({
-            title: 'Almacenamiento seguro',
-            description: 'Guardando copia en la plataforma.',
-          });
+          if (driveErr?.message?.includes('no coincide')) {
+            toast({
+              variant: 'destructive',
+              title: 'Cuenta de Google no válida',
+              description: driveErr.message,
+            });
+          } else {
+            toast({
+              title: 'Almacenamiento seguro',
+              description: 'Guardando copia en la plataforma.',
+            });
+          }
         }
 
         if (!driveSuccess) {

@@ -214,7 +214,17 @@ export function ModerationQueue() {
                         <div className="flex items-center gap-4">
                             <Link href={`/artwork/${item.id}`} target="_blank">
                                 <div className="relative h-20 w-16 bg-muted rounded-md overflow-hidden">
-                                     <Image src={item.imageUrl} alt={item.title} fill style={{ objectFit: 'contain' }} />
+                                     <Image
+                                         src={item.imageUrl}
+                                         alt={item.title}
+                                         fill
+                                         style={{ objectFit: 'contain' }}
+                                         unoptimized={
+                                             item.imageUrl.startsWith('data:') ||
+                                             item.imageUrl.includes('lh3.googleusercontent.com') ||
+                                             item.imageUrl.startsWith('/uploads')
+                                         }
+                                     />
                                 </div>
                             </Link>
                             <div>
