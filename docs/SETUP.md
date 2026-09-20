@@ -41,7 +41,6 @@ The CLI will ask you a series of questions:
     *   Use the arrow keys to navigate. Press the spacebar to select:
         *   `Realtime Database Security Rules`
         *   `Hosting: Configure and deploy Firebase Hosting sites`
-        *   `Storage: Deploy Cloud Storage security rules`
     *   Press `Enter` to confirm.
 
 2.  **Please select an option:**
@@ -53,26 +52,23 @@ The CLI will ask you a series of questions:
 4.  **What file should be used for Database Rules?**
     *   Press `Enter` to accept the default (`database.rules.json`).
 
-5.  **What file should be used for Storage Rules?**
-    *   Press `Enter` to accept the default (`storage.rules`).
-
-6.  **What do you want to use as your public directory?**
+5.  **What do you want to use as your public directory?**
     *   Type `.` (a single dot) and press `Enter`. This tells Firebase that App Hosting will handle the build process.
 
-7.  **Configure as a single-page app (rewrite all urls to /index.html)?**
+6.  **Configure as a single-page app (rewrite all urls to /index.html)?**
     *   Type `N` (for No) and press `Enter`. Next.js handles its own routing.
 
-8.  **Set up automatic builds and deploys with GitHub/GitLab?**
+7.  **Set up automatic builds and deploys with GitHub/GitLab?**
     *   Type `N` (for No) and press `Enter`.
 
 This will create the `.firebaserc` file, linking your local code to your cloud project.
 
 ### Step 4: Deploy Your Rules and Application
 
-Now you are ready to deploy. To deploy **only** the security rules for the database and storage, run:
+Now you are ready to deploy. To deploy **only** the security rules for the database, run:
 
 ```bash
-firebase deploy --only database,storage
+firebase deploy --only database
 ```
 
 To deploy your entire application (including the web app and all rules), run:
@@ -92,7 +88,6 @@ NEXT_PUBLIC_FIREBASE_API_KEY=
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_DATABASE_URL=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=

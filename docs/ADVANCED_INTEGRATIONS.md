@@ -49,7 +49,7 @@ As the platform evolves, this section will include blueprints for:
 Currently, the primary server-side logic runs directly inside the Next.js application, deployed via Firebase App Hosting.
 
 ### Database Maintenance & Admin Cleanup
-To maintain database performance (Realtime Database), the platform includes robust administrative tools designed to purge obsolete data (such as orphaned likes, outdated bookings, legacy base64-encoded avatars, and stale aliases).
+To maintain database performance (Realtime Database), the platform includes robust administrative tools designed to purge obsolete data (such as orphaned likes, outdated bookings, stale aliases, and orphaned records). Image storage is handled externally via Google Drive (user accounts) and IPFS (NFTs), so no local file cleanup is required.
 - **Web Interface:** Accessible via `/admin/cleanup` for users with Super-Administrator permissions. It scans the database and applies a patch update safely.
 - **Terminal Execution:** A CLI script is provided in the project root (`cleanup-script.mjs` and `run-cleanup.sh`). It runs offline via the Firebase Client SDK authenticated via credentials passed in the terminal.
 Usage: `./run-cleanup.sh "admin_email" "admin_password"`

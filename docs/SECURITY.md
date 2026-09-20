@@ -56,7 +56,7 @@ This document provides a comprehensive overview of the security architecture and
 - **Policy Enforcement:** The AI checks for inappropriate content based on predefined safety policies (e.g., sexually explicit, hate speech). If an image is flagged, the upload is blocked, and the user is notified.
 
 ### 3.2. Image Watermarking
-- **Intellectual Property Protection:** To protect artists' work, a server-side process automatically applies a discreet "Inkfinity" watermark to every uploaded artwork before it is stored and displayed.
+- **Intellectual Property Protection:** To protect artists' work, a server-side process automatically applies a discreet "Inkfinity" watermark to every uploaded artwork before it is stored in the user's Google Drive account (folder "Inkfinity Artworks") or on IPFS for NFT artworks.
 
 ### 3.3. Strict Data Validation
 - **Schema Enforcement:** The `database.rules.json` file contains strict validation rules. These rules ensure that all data written to the database conforms to the expected schema (e.g., a `price` must be a number, a `booking` must have a `clientId`).

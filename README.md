@@ -2,7 +2,7 @@
 
 Inkfinity is a modern, feature-rich web application built with Next.js and Firebase, designed as a comprehensive marketplace and community platform for the tattoo industry. It connects tattoo artists, studios, and clients in a single, decentralized ecosystem.
 
-This project was built to showcase the integration of modern web technologies, including a robust front-end with React and ShadCN UI, a secure and scalable backend with Firebase (Authentication, Realtime Database, Storage), and advanced AI-powered features using Google's Genkit.
+This project was built to showcase the integration of modern web technologies, including a robust front-end with React and ShadCN UI, a secure and scalable backend with Firebase (Authentication, Realtime Database), decentralized image storage via Google Drive and IPFS, and advanced AI-powered features using Google's Genkit.
 
 ---
 
@@ -23,7 +23,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Advanced Artwork & Digital Asset Management:** Artists can upload their portfolios and list existing NFTs for sale.
 *   **Web3 Integration:** Secure, peer-to-peer transactions for artwork sales and booking deposits using cryptocurrency on a configurable network (Polygon or Amoy testnet).
 *   **Booking & Scheduling System:** Clients can book appointments with artists, who can manage their requests and availability settings through a dedicated dashboard.
-*   **Direct User-to-User Chat:** Real-time messaging for seamless communication between all user types.
+*   **Admin-to-User Chat:** Real-time messaging restricted to communication between administrators and users for platform support. Users contact each other via their social media links (WhatsApp, Instagram, Telegram) displayed on their profiles.
 *   **Comprehensive Admin *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings, and moderate content. Moderation Panel:** Tools for administrators to manage users, configure platform settings, and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
 *   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. Optional **facial scan 2FA** uses a multi-layer chain: client-side face detection (MediaPipe), liveness detection (blink + head motion), deterministic face embeddings (face-api), a 3-frame AI comparison with confidence scoring (Genkit/Gemini), escalating rate limiting, and an email-link fallback.
 
@@ -31,7 +31,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 
 *   **Framework:** [Next.js](https://nextjs.org/) (with App Router)
 *   **UI:** [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [ShadCN UI](https://ui.shadcn.com/), [Tailwind CSS](https://tailwindcss.com/)
-*   **Backend & Database:** [Firebase](https://firebase.google.com/) (Authentication, Realtime Database, Cloud Functions). *Firebase Storage uploads were disconnected; images travel as data URIs.*
+*   **Backend & Database:** [Firebase](https://firebase.google.com/) (Authentication, Realtime Database, Cloud Functions). *Firebase Storage was fully removed; images are stored in each user's Google Drive account (via OAuth, module `src/lib/google-drive.ts`) and NFT artworks on IPFS (`src/lib/ipfs.ts`).*
 *   **Generative AI:** [Google AI & Genkit](https://firebase.google.com/docs/genkit)
 *   **Client-side ML:** [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision) (face detection + face landmarker) and [face-api.js](https://vladmandic.github.io/face-api/face-api.js/) (face embeddings), served from `public/models/`.
 *   **Web3:** [Ethers.js](https://ethers.io/) for wallet interactions + [Reown AppKit](https://docs.reown.com/appkit) (WalletConnect) for connecting mobile wallets (Android/iOS deep links / QR), with fallback to injected extensions (`window.ethereum`).
