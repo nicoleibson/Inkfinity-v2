@@ -268,7 +268,7 @@ export default function SignupForm() {
           
           // Upload avatar (prefer Google Drive if connected for this specific email, fallback to storage)
           let driveSuccess = false;
-          const driveToken = getCachedDriveAccessToken(formValues.email);
+          const driveToken = getCachedDriveAccessToken(user.email!);
 
           if (driveToken) {
             try {
