@@ -20,7 +20,6 @@ import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, r
 import { ref as dbRef, set, update, get } from "firebase/database";
 import { add } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
-import { uploadDataUri } from '@/lib/firebase/storage';
 import { uploadProfileImageToGoogleDrive, getCachedDriveAccessToken } from '@/lib/google-drive';
 
 export default function SignupForm() {
@@ -288,8 +287,7 @@ export default function SignupForm() {
           }
 
           if (!driveSuccess) {
-            const avatarPath = `profiles/${user.uid}/avatar_${Date.now()}.jpg`;
-            avatarUrl = await uploadDataUri(avatarPath, profileImageUri);
+            throw new Error("Se requiere vinculación con Google Drive para subir imágenes.");
           }
       }
       

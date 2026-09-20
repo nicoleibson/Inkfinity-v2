@@ -2,8 +2,6 @@
 import { GoogleAuthProvider, signInWithPopup, getAuth } from 'firebase/auth';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { auth } from './firebase-config';
-import { deleteFromStorage } from './firebase/storage';
-
 export const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 /**
@@ -375,18 +373,7 @@ export const deleteOldUserMedia = async (options: {
     }
   }
 
-  // 2. If the previous image was stored in local /uploads/...
-  if (oldUrl && typeof oldUrl === 'string' && oldUrl.startsWith('/uploads/')) {
-    try {
-      // Remove /uploads/ prefix and any URL query string
-      const relativePath = oldUrl.split('?')[0].replace(/^\/uploads\//, '');
-      if (relativePath) {
-        await deleteFromStorage(relativePath);
-      }
-    } catch (localErr) {
-      console.warn(`[Media Cleanup] Error deleting old local file ${oldUrl}:`, localErr);
-    }
-  }
+  // Local uploads cleanup removed as storage was disabled.
 };
 
 

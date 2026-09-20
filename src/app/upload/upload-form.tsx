@@ -15,7 +15,6 @@ import { verifyNftOwnership } from '@/ai/flows/verify-nft-ownership-flow';
 import { Loader2, Sparkles, UploadCloud, ShieldAlert, ShieldCheck, FileUp, Droplets, Gem, HardDrive, Crop, ArrowRight, Info, X, MapPin, Wallet, FolderSync, CheckCircle2, Cloud, Database } from 'lucide-react';
 import { getDatabase, ref as databaseRef, set, push, update, increment, get } from 'firebase/database';
 import { auth, database } from '@/lib/firebase-config';
-import { uploadDataUri } from '@/lib/firebase/storage';
 import { authorizeGoogleDrive, uploadArtworkToGoogleDrive, getCachedDriveAccessToken } from '@/lib/google-drive';
 import { uploadArtworkToIpfs } from '@/lib/ipfs';
 import type { ArtworkDetailsOutput } from '@/ai/schemas/artwork-details-generation';
@@ -379,10 +378,7 @@ export default function UploadForm() {
           ipfsHash = ipfsRes.cid;
         } catch (ipfsErr: any) {
           console.warn('IPFS upload fallback:', ipfsErr);
-          const fallbackPath = `artworks/${user.uid}/${artworkId}.jpg`;
-          imageUrl = await uploadDataUri(fallbackPath, watermarkedImageDataUri);
-          storagePath = fallbackPath;
-          storageType = 'local';
+          throw new Error("La subida a IPFS falló.");
         }
       } else {
         // Opción 1: Google Drive para obras normales
@@ -435,17 +431,14 @@ export default function UploadForm() {
             });
           } else {
             toast({
-              title: 'Almacenamiento seguro',
-              description: 'Guardando copia en la plataforma.',
+              title: 'Error de almacenamiento',
+              description: 'No se pudo guardar en Google Drive.',
             });
           }
         }
 
         if (!driveSuccess) {
-          const fallbackPath = `artworks/${user.uid}/${artworkId}.jpg`;
-          imageUrl = await uploadDataUri(fallbackPath, watermarkedImageDataUri);
-          storagePath = fallbackPath;
-          storageType = 'local';
+          throw new Error("La subida a Google Drive falló. Se requiere autorización.");
         }
       }
 

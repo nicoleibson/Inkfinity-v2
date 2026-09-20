@@ -24,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { auth, database } from '@/lib/firebase-config';
 import { ref as dbRef, remove, update, increment, get } from 'firebase/database';
-import { deleteFromStorage } from '@/lib/firebase/storage';
 import type { Artwork } from '@/types/artwork';
 import { ArtworkEditDialog } from './artwork-edit-dialog';
 import type { UserProfile } from '@/types/user';
@@ -61,9 +60,7 @@ export function ArtworkActions({ artwork }: ArtworkActionsProps) {
     setIsProcessing(true);
 
     try {
-      // 1. Delete from local storage
-      await deleteFromStorage(artwork.storagePath);
-
+      // Local storage cleanup removed as storage was disabled.
       // 2. Delete from Realtime Database
       const artworkDbRef = dbRef(database, `artworks/${artwork.id}`);
       await remove(artworkDbRef);

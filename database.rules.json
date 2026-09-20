@@ -66,6 +66,7 @@
       }
     },
     "bookings": {
+      ".read": "auth != null && ( (query.orderByChild == 'clientId' && query.equalTo == auth.uid) || (query.orderByChild == 'artistId' && query.equalTo == auth.uid) || root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator' )",
       ".indexOn": ["clientId", "artistId"],
       "$bookingId": {
         ".read": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",

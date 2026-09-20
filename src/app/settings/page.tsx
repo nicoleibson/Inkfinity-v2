@@ -42,7 +42,6 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { uploadDataUri } from '@/lib/firebase/storage';
 import {
   uploadProfileImageToGoogleDrive,
   authorizeGoogleDrive,
@@ -338,12 +337,7 @@ export default function SettingsPage() {
         }
 
         if (!driveSuccess) {
-          // Unique path with timestamp to prevent routing conflicts and stale cache
-          const avatarPath = `profiles/${currentUser.uid}/avatar_${Date.now()}.jpg`;
-          avatarUrl = await uploadDataUri(avatarPath, avatarPreview);
-          updates[`/users/${currentUser.uid}/avatarUrl`] = avatarUrl;
-          // Clean up any stale Drive file ID in database
-          updates[`/users/${currentUser.uid}/avatarDriveFileId`] = null;
+          throw new Error("Se requiere vinculación con Google Drive para subir imágenes.");
         }
 
         // Delete old avatar image from storage (Google Drive and/or local storage)
@@ -406,12 +400,7 @@ export default function SettingsPage() {
         }
 
         if (!driveSuccess) {
-          // Unique path with timestamp to prevent routing conflicts and stale cache
-          const backgroundPath = `profiles/${currentUser.uid}/background_${Date.now()}.jpg`;
-          backgroundUrl = await uploadDataUri(backgroundPath, backgroundPreview);
-          updates[`/users/${currentUser.uid}/backgroundUrl`] = backgroundUrl;
-          // Clean up any stale Drive file ID in database
-          updates[`/users/${currentUser.uid}/backgroundDriveFileId`] = null;
+          throw new Error("Se requiere vinculación con Google Drive para subir imágenes.");
         }
 
         // Delete old background image from storage (Google Drive and/or local storage)

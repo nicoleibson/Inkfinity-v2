@@ -4,7 +4,6 @@
 import { useEffect, useState } from "react";
 import { database, auth } from "@/lib/firebase-config";
 import { ref, onValue, query, orderByChild, equalTo, remove, update, increment, get, push, set } from "firebase/database";
-import { deleteFromStorage } from '@/lib/firebase/storage';
 import type { UserProfile } from "@/types/user";
 import type { Artwork } from "@/types/artwork";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -112,7 +111,6 @@ export function ModerationQueue() {
 
   const handleApproveDeletion = async (artwork: Artwork) => {
     try {
-        await deleteFromStorage(artwork.storagePath);
         await remove(ref(database, `artworks/${artwork.id}`));
         await update(ref(database, `users/${artwork.artistId}`), {
             artworksCount: increment(-1),
