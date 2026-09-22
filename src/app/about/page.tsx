@@ -7,7 +7,7 @@ import CopyButton from "@/components/ui/CopyButton"; // Import the new copy butt
 
 export default function AboutPage() {
     // Using a placeholder wallet address. Remember to set this in your environment variables.
-    const platformWallet = process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS || "0x1344b56e71f2a223c88F0CC13506D43F4C15ec5b";
+    const platformWallet = process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS || "0xA90826876B82Ac777ABddF95F22A8688B48C3b26";
 
     return (
         <div className="max-w-4xl mx-auto space-y-12">
