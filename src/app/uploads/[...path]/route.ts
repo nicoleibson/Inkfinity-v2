@@ -41,10 +41,10 @@ const sanitizePath = (parts: string[]): string | null => {
 
 export async function GET(
   req: NextRequest,
-  props: { params: Promise<{ path?: string[] }> | { path?: string[] } }
+  props: { params: Promise<{ path?: string[] }> }
 ) {
   try {
-    const resolvedParams = await Promise.resolve(props.params);
+    const resolvedParams = await props.params;
     const pathSegments = resolvedParams?.path || [];
     const safeRelativePath = sanitizePath(pathSegments);
 

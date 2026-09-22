@@ -34,7 +34,6 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
     description: '',
     tags: [] as string[],
     isForSale: false,
-    price: '' as number | '',
     isDigitalAsset: false,
     blockchain: 'amoy' as 'amoy' | 'polygon',
     contractAddress: '',
@@ -50,7 +49,6 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
         description: artwork.description || '',
         tags: artwork.tags || [],
         isForSale: artwork.isForSale || false,
-        price: artwork.price ?? '',
         isDigitalAsset: artwork.isDigitalAsset || false,
         blockchain: artwork.blockchain || 'amoy',
         contractAddress: artwork.contractAddress || '',
@@ -71,18 +69,9 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
   const handleSwitchChange = (name: 'isForSale' | 'isDigitalAsset', checked: boolean) => {
     setFormData(prev => ({...prev, [name]: checked}));
   };
-  
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({...prev, price: e.target.value === '' ? '' : Number(e.target.value)}));
-  };
 
   const handleSaveChanges = async () => {
     setLoading(true);
-    if (formData.isForSale && (formData.price === '' || Number(formData.price) <= 0)) {
-        toast({ variant: 'destructive', title: 'Invalid Price', description: 'Please enter a valid price greater than 0.' });
-        setLoading(false);
-        return;
-    }
     if (formData.isDigitalAsset && (!formData.contractAddress.trim() || !formData.tokenId.trim())) {
         toast({ variant: 'destructive', title: 'Digital Asset Info Incomplete', description: 'Please provide a valid contract address and token ID.' });
         setLoading(false);
@@ -96,7 +85,7 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
         description: formData.description,
         tags: formData.tags,
         isForSale: formData.isForSale,
-        price: formData.isForSale ? Number(formData.price) : null,
+        price: null,
         isDigitalAsset: formData.isDigitalAsset,
         blockchain: formData.isDigitalAsset ? formData.blockchain : null,
         contractAddress: formData.isDigitalAsset ? formData.contractAddress : null,
@@ -145,34 +134,17 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
           </div>
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
-                <h3 className="font-medium">List for Sale</h3>
+                <h3 className="font-medium">Publicada en la Blockchain</h3>
                 <p className="text-sm text-muted-foreground">
-                    Make this artwork available for purchase.
+                    La obra queda enlazada y verificada en-chain. Inkfinity no gestiona transacciones de esta obra.
                 </p>
             </div>
             <Switch
                 checked={formData.isForSale}
                 onCheckedChange={(checked) => handleSwitchChange('isForSale', checked)}
-                aria-label="List for sale"
+                aria-label="Published on blockchain"
             />
           </div>
-          {formData.isForSale && (
-            <div className="grid gap-2">
-              <Label htmlFor="price">Price (in USD)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input
-                  id="price"
-                  name="price"
-                  type="number"
-                  value={formData.price}
-                  onChange={handlePriceChange}
-                  placeholder="e.g., 50.00"
-                  className="pl-7"
-                />
-              </div>
-            </div>
-          )}
            <div className="flex items-center justify-between rounded-lg border p-4">
                 <div>
                     <h3 className="font-medium">Is this a Digital Asset (NFT)?</h3>

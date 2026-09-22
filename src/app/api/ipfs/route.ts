@@ -2,15 +2,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import bs58 from "bs58";
+import { getAdminStorage, getArtworkBucketName, getPublicStorageUrl } from "@/lib/firebase-admin";
 
-// In-memory / process-level IPFS asset store for instant gateway fallback
+// In-memory cache of recently processed assets for fast local serving.
+// It is a cache, NOT the source of truth: durability comes from Cloud Storage.
 const ipfsStore = new Map<string, { buffer: Buffer; mimeType: string; fileName: string }>();
+
+const ARTWORK_FOLDER = "inkfinity/artworks";
+const METADATA_FOLDER = "inkfinity/nft-metadata";
 
 function computeCIDv0(buffer: Buffer): string {
   const hash = crypto.createHash("sha256").update(buffer).digest();
   const multihash = Buffer.concat([Buffer.from([0x12, 0x20]), hash]);
   const encodeFn = (bs58 as any).default?.encode || bs58.encode;
   return encodeFn(multihash);
+}
+
+/** Stores an object in the project's Cloud Storage bucket. */
+async function persistToCloudStorage(
+  objectPath: string,
+  content: Buffer,
+  contentType: string,
+  customMetadata: Record<string, string>
+): Promise<void> {
+  const bucketName = getArtworkBucketName();
+  if (!bucketName) {
+    throw new Error("No storage bucket configured.");
+  }
+  const bucket = getAdminStorage().bucket(bucketName);
+  await bucket.file(objectPath).save(content, {
+    contentType,
+    resumable: false,
+    gzip: false,
+    metadata: { metadata: customMetadata },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -26,75 +51,68 @@ export async function POST(req: NextRequest) {
     const base64Data = dataUri.replace(/^data:[^;]+;base64,/, "");
     const fileBuffer = Buffer.from(base64Data, "base64");
 
-    // 1. Compute standard IPFS CIDv0
+    const finalFileName = fileName || `inkfinity_${crypto.createHash("sha256").update(fileBuffer).digest("hex").slice(0, 16)}.jpg`;
+
+    // Authoritative CID, computed from the exact bytes of the artwork.
     const imageCid = computeCIDv0(fileBuffer);
-    const ipfsUri = `ipfs://${imageCid}`;
-    
-    // Store in local IPFS cache
-    ipfsStore.set(imageCid, { buffer: fileBuffer, mimeType, fileName: fileName || `${imageCid}.jpg` });
 
-    // 2. Try external pinning service if configured (e.g. Pinata)
-    const pinataJwt = process.env.PINATA_JWT;
-    const pinataApiKey = process.env.PINATA_API_KEY;
-    const pinataSecretApiKey = process.env.PINATA_SECRET_API_KEY;
-
-    let pinnedExternally = false;
-
-    if (pinataJwt || (pinataApiKey && pinataSecretApiKey)) {
-      try {
-        const formData = new FormData();
-        const blob = new Blob([fileBuffer], { type: mimeType });
-        formData.append("file", blob, fileName || `inkfinity_${imageCid}.jpg`);
-        formData.append("pinataMetadata", JSON.stringify({
-          name: title || `Inkfinity NFT #${tokenId || imageCid.slice(0, 8)}`,
-          keyvalues: { platform: "Inkfinity", type: "NFT", contractAddress: contractAddress || "" }
-        }));
-
-        const headers: Record<string, string> = {};
-        if (pinataJwt) {
-          headers["Authorization"] = `Bearer ${pinataJwt}`;
-        } else {
-          headers["pinata_api_key"] = pinataApiKey!;
-          headers["pinata_secret_api_key"] = pinataSecretApiKey!;
-        }
-
-        const pinRes = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
-          method: "POST",
-          headers,
-          body: formData,
-        });
-
-        if (pinRes.ok) {
-          pinnedExternally = true;
-        }
-      } catch (pinErr) {
-        console.warn("Pinata upload notice:", pinErr);
-      }
-    }
-
-    // 3. Generate standard ERC-721 / ERC-1155 NFT Metadata
-    const nftMetadata = {
+    // Standard ERC-721 / ERC-1155 NFT Metadata.
+    const nftMetadata: Record<string, unknown> = {
       name: title || "Inkfinity Digital Art NFT",
       description: description || "Authentic digital tattoo and art NFT on Inkfinity",
-      image: ipfsUri,
-      external_url: `https://inkfinity.site`,
+      image: `ipfs://${imageCid}`,
+      external_url: (process.env.NEXT_PUBLIC_SITE_URL as string) || "https://inkfinity.site",
       attributes: [
         { trait_type: "Artist", value: artistName || "Inkfinity Creator" },
         ...(tags && Array.isArray(tags) ? [{ trait_type: "Tags", value: tags.join(", ") }] : []),
         ...(contractAddress ? [{ trait_type: "Contract", value: contractAddress }] : []),
         ...(tokenId ? [{ trait_type: "Token ID", value: tokenId }] : []),
-        { trait_type: "Storage", value: "IPFS / Decentralized" },
-      ]
+        { trait_type: "Storage", value: "Google Cloud Storage (IPFS-compatible CID)" },
+      ],
     };
-
     const metadataBuffer = Buffer.from(JSON.stringify(nftMetadata, null, 2), "utf-8");
     const metadataCid = computeCIDv0(metadataBuffer);
-    const metadataIpfsUri = `ipfs://${metadataCid}`;
-    ipfsStore.set(metadataCid, { buffer: metadataBuffer, mimeType: "application/json", fileName: "metadata.json" });
 
-    // Primary gateway URL
-    const gatewayUrl = `https://ipfs.io/ipfs/${imageCid}`;
-    const fallbackGatewayUrl = `https://gateway.pinata.cloud/ipfs/${imageCid}`;
+    const artistPath = `${ARTWORK_FOLDER}/${imageCid}`;
+    const metadataPath = `${METADATA_FOLDER}/${metadataCid}.json`;
+
+    // Always seed the in-process cache for fast local serving.
+    ipfsStore.set(imageCid, { buffer: fileBuffer, mimeType, fileName: finalFileName });
+    ipfsStore.set(metadataCid, {
+      buffer: metadataBuffer,
+      mimeType: "application/json",
+      fileName: "metadata.json",
+    });
+
+    // Primary path: persist durably in Cloud Storage so the artwork survives
+    // server restarts (this is the replace for the old Pinata dependency).
+    let storedDurably = false;
+    let storageUrl: string | null = null;
+    try {
+      await persistToCloudStorage(
+        artistPath,
+        fileBuffer,
+        mimeType,
+        { platform: "Inkfinity", type: "NFT", contractAddress: contractAddress || "" }
+      );
+      await persistToCloudStorage(
+        metadataPath,
+        metadataBuffer,
+        "application/json",
+        { platform: "Inkfinity", type: "NFT-metadata", contractAddress: contractAddress || "" }
+      );
+      storedDurably = true;
+      storageUrl = getPublicStorageUrl(getArtworkBucketName()!, artistPath);
+      console.log(`[IPFS] Persisted to Cloud Storage: ${artistPath}`);
+    } catch (storageErr) {
+      console.warn("[IPFS] Cloud Storage unavailable, falling back to in-memory cache:", storageErr);
+    }
+
+    const ipfsUri = `ipfs://${imageCid}`;
+    // When durable, prefer the Cloud Storage URL (public via storage.rules);
+    // otherwise fall back to the app's own proxy so the image can still render.
+    const gatewayUrl = storedDurably && storageUrl ? storageUrl : `/api/ipfs?cid=${imageCid}`;
+    const fallbackGatewayUrl = `https://ipfs.io/ipfs/${imageCid}`;
     const localProxyUrl = `/api/ipfs?cid=${imageCid}`;
 
     return NextResponse.json({
@@ -104,9 +122,9 @@ export async function POST(req: NextRequest) {
       gatewayUrl,
       fallbackGatewayUrl,
       localProxyUrl,
-      pinnedExternally,
+      storedDurably,
       metadataCid,
-      metadataIpfsUri,
+      metadataIpfsUri: `ipfs://${metadataCid}`,
       metadata: nftMetadata,
     });
   } catch (error: any) {
@@ -133,6 +151,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Redirect to public IPFS gateway if not in memory
+  // Cache miss: try to resolve from Cloud Storage (durable copy).
+  const bucketName = getArtworkBucketName();
+  if (bucketName) {
+    return NextResponse.redirect(
+      getPublicStorageUrl(bucketName, `${ARTWORK_FOLDER}/${cid}`)
+    );
+  }
+
   return NextResponse.redirect(`https://ipfs.io/ipfs/${cid}`);
 }

@@ -60,7 +60,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'gateway.pinata.cloud',
+        hostname: 'firebasestorage.googleapis.com',
         pathname: '/**',
       },
       {

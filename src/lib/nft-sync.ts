@@ -54,6 +54,7 @@ export async function syncAllNfts() {
             walletAddress: ownerWallet,
             tokenId: artwork.tokenId,
             contractAddress: artwork.contractAddress,
+            network: artwork.blockchain || undefined,
         });
 
         synced++;

@@ -24,13 +24,14 @@ export interface Artwork {
   buyerId?: string | null; // UID of the user who has paid but not yet received the NFT
   createdAt: string; // ISO string
   isForSale: boolean;
-  price: number | null;
+  price?: number | null;
   likesCount?: number;
   likes?: { [key: string]: boolean };
   commentsCount?: number;
   dataAiHint?: string;
   moderationStatus?: 'pending_deletion' | 'approved' | 'awaiting_delivery'; // Added new status
   moderationReason?: string; // Reason provided by admin for deletion report
+  moderationSource?: 'ai' | 'admin';
   reportedBy?: string; // UID of the admin who reported it
   location?: { lat: number; lng: number } | null;
   locationName?: string | null;
@@ -41,6 +42,8 @@ export interface Artwork {
   // Storage properties
   storageType?: 'google-drive' | 'ipfs' | 'local' | 'cloud-storage';
   ipfsHash?: string;
+  ipfsGatewayUrl?: string;
+  metadataCid?: string;
   googleDriveFileId?: string;
   googleDriveFolderId?: string;
   googleDriveViewUrl?: string;

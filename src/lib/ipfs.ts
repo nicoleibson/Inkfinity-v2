@@ -7,7 +7,7 @@ export interface IpfsUploadResult {
   gatewayUrl: string;
   fallbackGatewayUrl: string;
   localProxyUrl: string;
-  pinnedExternally: boolean;
+  storedDurably: boolean;
   metadataCid: string;
   metadataIpfsUri: string;
   metadata: any;

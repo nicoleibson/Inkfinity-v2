@@ -111,7 +111,6 @@ export default function UploadForm() {
   
   // Marketplace unification
   const [isForSale, setIsForSale] = useState(false);
-  const [price, setPrice] = useState<number | ''>('');
   const [blockchain, setBlockchain] = useState<'amoy' | 'polygon'>('amoy');
   const [contractAddress, setContractAddress] = useState('');
   const [tokenId, setTokenId] = useState('');
@@ -249,7 +248,6 @@ export default function UploadForm() {
       setCrop(undefined);
       setCompletedCrop(undefined);
       setIsForSale(false);
-      setPrice('');
       setContractAddress('');
       setTokenId('');
       setIsNftVerified(false);
@@ -296,7 +294,8 @@ export default function UploadForm() {
         const verification = await verifyNftOwnership({
             walletAddress: currentUserProfile.walletAddress,
             tokenId: tokenId,
-            contractAddress: contractAddress
+            contractAddress: contractAddress,
+            network: blockchain,
         });
         if (verification.isOwner) {
             setIsNftVerified(true);
@@ -321,12 +320,8 @@ export default function UploadForm() {
     }
     
     if (isForSale) {
-        if (price === '' || Number(price) <= 0) {
-            toast({ variant: 'destructive', title: 'Invalid Price' });
-            return;
-        }
         if (!isNftVerified) {
-            toast({ variant: 'destructive', title: 'NFT Not Verified', description: 'You must verify ownership of the NFT before listing for sale.' });
+            toast({ variant: 'destructive', title: 'NFT Not Verified', description: 'You must verify ownership of the NFT before publishing it.' });
             return;
         }
     }
@@ -353,6 +348,8 @@ export default function UploadForm() {
       let storagePath = '';
       let storageType: 'google-drive' | 'ipfs' | 'local' = 'local';
       let ipfsHash: string | undefined;
+      let ipfsGatewayUrl: string | undefined;
+      let metadataCid: string | undefined;
       let googleDriveFileId: string | undefined;
       let googleDriveFolderId: string | undefined;
       let googleDriveViewUrl: string | undefined;
@@ -372,10 +369,16 @@ export default function UploadForm() {
             tokenId,
           });
 
-          imageUrl = ipfsRes.gatewayUrl;
+          // Store a durable URL: when the asset was persisted to Cloud Storage its
+          // content is permanent, so that URL is safe to use. Otherwise fall
+          // back to the app's own proxy so the image can still be rendered.
+          const storageUrl = ipfsRes.storedDurably ? ipfsRes.gatewayUrl : ipfsRes.localProxyUrl;
+          imageUrl = storageUrl;
           storagePath = ipfsRes.ipfsUri;
           storageType = 'ipfs';
           ipfsHash = ipfsRes.cid;
+          ipfsGatewayUrl = storageUrl;
+          metadataCid = ipfsRes.metadataCid;
         } catch (ipfsErr: any) {
           console.warn('IPFS upload fallback:', ipfsErr);
           throw new Error("La subida a IPFS falló.");
@@ -451,6 +454,8 @@ export default function UploadForm() {
         storagePath: storagePath,
         storageType: storageType,
         ...(ipfsHash ? { ipfsHash } : {}),
+        ...(ipfsGatewayUrl ? { ipfsGatewayUrl } : {}),
+        ...(metadataCid ? { metadataCid } : {}),
         ...(googleDriveFileId ? { googleDriveFileId } : {}),
         ...(googleDriveFolderId ? { googleDriveFolderId } : {}),
         ...(googleDriveViewUrl ? { googleDriveViewUrl } : {}),
@@ -463,13 +468,15 @@ export default function UploadForm() {
         ownerName: currentUserProfile.name || '',
         createdAt: new Date().toISOString(),
         isForSale: isForSale, 
-        price: isForSale ? Number(price) : null,
+        price: null,
         isDigitalAsset: isForSale, // For sale unified with NFT
         blockchain: isForSale ? blockchain : null,
         contractAddress: isForSale ? (contractAddress || null) : null,
         tokenId: isForSale ? (tokenId || null) : null,
         ownershipMismatch: false,
-        moderationStatus: 'approved',
+        moderationStatus: moderation?.isSafe ? 'approved' : 'pending_deletion',
+        moderationReason: moderation?.reason ? `AI: ${moderation.reason}` : null,
+        moderationSource: 'ai',
         location: currentUserProfile.location || null,
         locationName: currentUserProfile.locationName || null,
       };
@@ -535,7 +542,7 @@ export default function UploadForm() {
   }
 
   const isProcessing = ['moderating', 'generating', 'watermarking', 'uploading', 'saving', 'verifying_nft'].includes(loadingState);
-  const canSubmit = (loadingState === 'success' || loadingState === 'idle') && artworkDetails.title && (!isForSale || isNftVerified);
+  const canSubmit = loadingState === 'success' && artworkDetails.title && moderation?.isSafe === true && (!isForSale || isNftVerified);
 
   return (
     <Card className="max-w-4xl mx-auto">
@@ -585,18 +592,14 @@ export default function UploadForm() {
                     <div className="border rounded-lg p-4 bg-primary/5 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="font-bold flex items-center gap-2"><Gem className="h-4 w-4"/> Venta como NFT</h3>
-                                <p className="text-xs text-muted-foreground">Requiere verificación en blockchain.</p>
+                                <h3 className="font-bold flex items-center gap-2"><Gem className="h-4 w-4"/> Publicar en la Blockchain (NFT)</h3>
+                                <p className="text-xs text-muted-foreground">Requiere verificación de propiedad en blockchain.</p>
                             </div>
                             <Switch checked={isForSale} onCheckedChange={setIsForSale} />
                         </div>
 
                         {isForSale && (
                             <div className="space-y-4 pt-2 border-t">
-                                <div className="grid gap-2">
-                                    <Label>Price (USD)</Label>
-                                    <Input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" />
-                                </div>
                                 <div className="grid gap-2">
                                     <Label>Blockchain Network</Label>
                                     <Select value={blockchain} onValueChange={(v: any) => setBlockchain(v)}>

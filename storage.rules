@@ -1,0 +1,17 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Artefactos publicados (imágenes y metadatos NFT) son públicos.
+    match /inkfinity/artworks/{allPaths=**} {
+      allow read: if true;
+    }
+    match /inkfinity/nft-metadata/{allPaths=**} {
+      allow read: if true;
+    }
+    // Todo lo demás queda cerrado; las escrituras solo ocurren mediante
+    // firebase-admin (server-side), que no pasa por estas reglas.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -9,45 +9,31 @@ import { ref, get, onValue, update, push, serverTimestamp, query, orderByChild, 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Heart, MessageCircle, Share2, Wallet, Loader2, User, UserPlus, AlertTriangle, History, ArrowRight, Trash2, CheckCheck, Clock, Pencil, Save, Cloud, Database, ExternalLink, ImageOff, Gem } from "lucide-react";
-import type { Artwork, SaleRecord } from '@/types/artwork';
+import { Heart, MessageCircle, Share2, User, UserPlus, AlertTriangle, Trash2, Pencil, Save, Cloud, Database, ExternalLink, ImageOff, Loader2 } from "lucide-react";
+import type { Artwork } from '@/types/artwork';
 import type { UserProfile, Notification, Comment } from '@/types/user';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ArtworkActions } from '@/components/artwork/artwork-actions';
 import { Textarea } from '@/components/ui/textarea';
-import { format, formatDistanceToNow } from 'date-fns';
-import { useWallet } from '@/context/wallet-provider';
-import { parseEther, parseUnits } from 'ethers';
-import { getCryptoPrice } from '@/ai/flows/get-crypto-price-flow';
-import { verifyNftOwnership } from '@/ai/flows/verify-nft-ownership-flow';
+import { formatDistanceToNow } from 'date-fns';
+import { getTokenExplorerUrl, getIpfsGatewayUrl } from '@/lib/blockchain';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { usePlatformSettings } from '@/hooks/usePlatformSettings';
-
-type EnrichedSaleRecord = SaleRecord & {
-    fromOwner?: UserProfile;
-    toOwner?: UserProfile;
-};
 
 export default function ArtworkDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const artworkId = params.id as string;
   const [artwork, setArtwork] = useState<Artwork | null>(null);
-  const [saleHistory, setSaleHistory] = useState<EnrichedSaleRecord[]>([]);
   const [artist, setArtist] = useState<UserProfile | null>(null);
-  const [owner, setOwner] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<Partial<UserProfile> & { uid?: string } | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [ethPrice, setEthPrice] = useState<number | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commenterProfiles, setCommenterProfiles] = useState<{[key: string]: Partial<UserProfile>}>({});
   const [newComment, setNewComment] = useState("");
@@ -55,8 +41,6 @@ export default function ArtworkDetailPage() {
   const [editingComment, setEditingComment] = useState<{ id: string; text: string } | null>(null);
   const [imageError, setImageError] = useState(false);
   const { toast } = useToast();
-  const { provider, connectWallet, isConnected, walletAddress } = useWallet();
-  const { settings } = usePlatformSettings();
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -84,10 +68,6 @@ export default function ArtworkDetailPage() {
 
     setLoading(true);
     setError(null);
-    
-    getCryptoPrice({ cryptoSymbol: 'ETH' }).then(result => {
-        setEthPrice(result.priceUsd);
-    });
 
     const artworkRef = ref(database, `artworks/${artworkId}`);
     
@@ -103,32 +83,12 @@ export default function ArtworkDetailPage() {
       setLikeCount(artworkData.likesCount || 0);
 
       const artistPromise = get(ref(database, `users/${artworkData.artistId}`));
-      const ownerPromise = get(ref(database, `users/${artworkData.ownerId}`));
 
       try {
-        const [artistSnapshot, ownerSnapshot] = await Promise.all([artistPromise, ownerPromise]);
+        const [artistSnapshot] = await Promise.all([artistPromise]);
         if (artistSnapshot.exists()) {
           setArtist({ uid: artistSnapshot.key, ...artistSnapshot.val() });
         }
-        if (ownerSnapshot.exists()) {
-            setOwner({ uid: ownerSnapshot.key, ...ownerSnapshot.val() });
-        }
-
-        if (artworkData.saleHistory) {
-            const history: SaleRecord[] = Object.values(artworkData.saleHistory).sort((a,b) => b.timestamp - a.timestamp);
-            const enrichedHistoryPromises = history.map(async (sale) => {
-                const fromOwnerSnap = await get(ref(database, `users/${sale.fromOwnerId}`));
-                const toOwnerSnap = await get(ref(database, `users/${sale.toOwnerId}`));
-                return {
-                    ...sale,
-                    fromOwner: fromOwnerSnap.exists() ? fromOwnerSnap.val() : undefined,
-                    toOwner: toOwnerSnap.exists() ? toOwnerSnap.val() : undefined,
-                };
-            });
-            const enrichedHistory = await Promise.all(enrichedHistoryPromises);
-            setSaleHistory(enrichedHistory);
-        }
-
       } catch (err) {
           console.warn("Could not fetch user details:", err);
       }
@@ -148,14 +108,12 @@ export default function ArtworkDetailPage() {
         snapshot.forEach(childSnapshot => {
             const comment = { id: childSnapshot.key!, ...childSnapshot.val() };
             commentsData.push(comment);
-            // Collect user IDs that we don't have a profile for yet
             if (!commenterProfiles[comment.userId]) {
                 userIdsToFetch.push(comment.userId);
             }
         });
         setComments(commentsData.reverse());
 
-        // Fetch profiles for new commenters
         const uniqueUserIds = [...new Set(userIdsToFetch)];
         if (uniqueUserIds.length > 0) {
             const profilePromises = uniqueUserIds.map(id => get(ref(database, `users/${id}`)));
@@ -170,7 +128,6 @@ export default function ArtworkDetailPage() {
             });
         }
     });
-
 
     return () => {
       unsubscribeArtwork();
@@ -193,7 +150,6 @@ export default function ArtworkDetailPage() {
         return;
     }
     
-    // Optimistically update the UI
     setIsLiked(true);
     setLikeCount(prev => prev + 1);
     
@@ -223,154 +179,9 @@ export default function ArtworkDetailPage() {
         await update(ref(database), updates);
     } catch (error) {
         console.error("Like transaction failed: ", error);
-        // Revert optimistic UI update on error
         setIsLiked(false);
         setLikeCount(prev => prev - 1);
         toast({ variant: "destructive", title: "An error occurred." });
-    }
-  };
-  
-  const handlePurchase = async () => {
-    if (!currentUser || !currentUserProfile || !artwork || !artwork.isForSale || typeof artwork.price !== 'number' || !ethPrice) {
-        toast({ variant: 'destructive', title: 'This artwork is not for sale.'});
-        return;
-    }
-    if (!isConnected || !provider) {
-        toast({ variant: 'destructive', title: 'Wallet Not Connected', description: 'Please connect your wallet to pay.' });
-        connectWallet();
-        return;
-    }
-    if (currentUser.uid === artwork.ownerId) {
-        toast({ variant: 'destructive', title: 'You already own this artwork.'});
-        return;
-    }
-    if (!owner?.walletAddress) {
-        toast({ variant: 'destructive', title: 'Owner Not Ready', description: 'The current owner has not configured their wallet for payments.' });
-        return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-        const priceInEth = artwork.price / ethPrice;
-        const signer = await provider.getSigner();
-        
-        const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
-            to: owner.walletAddress,
-            value: parseEther(priceInEth.toFixed(18)),
-        };
-
-        if (settings?.network === 'amoy') {
-            const fee = parseUnits('30', 'gwei');
-            txParams.maxPriorityFeePerGas = fee;
-            txParams.maxFeePerGas = fee;
-        }
-
-        const tx = await signer.sendTransaction(txParams);
-        
-        toast({ title: "Transaction Sent", description: "Waiting for blockchain confirmation..." });
-        await tx.wait();
-
-        const updates: {[key: string]: any} = {};
-        
-        // 1. Update artwork status to awaiting delivery
-        updates[`/artworks/${artwork.id}/moderationStatus`] = 'awaiting_delivery';
-        updates[`/artworks/${artwork.id}/buyerId`] = currentUser.uid;
-        updates[`/artworks/${artwork.id}/isForSale`] = false; // Mark as no longer for sale
-        
-        // 2. Create notifications for both buyer and seller
-        const sellerNotificationRef = push(ref(database, `users/${artwork.ownerId}/notifications`));
-        updates[`/users/${artwork.ownerId}/notifications/${sellerNotificationRef.key}`] = {
-            type: 'sale',
-            fromUserId: currentUser.uid,
-            fromUserName: currentUserProfile.name || 'A user',
-            message: `Payment received for "${artwork.title}". Please transfer the NFT to the buyer.`,
-            isRead: false,
-            createdAt: serverTimestamp(),
-            link: `/artwork/${artwork.id}`
-        };
-
-        const buyerNotificationRef = push(ref(database, `users/${currentUser.uid}/notifications`));
-        updates[`/users/${currentUser.uid}/notifications/${buyerNotificationRef.key}`] = {
-            type: 'sale',
-            fromUserId: artwork.ownerId,
-            fromUserName: artwork.ownerName || 'Seller',
-            message: `Payment sent for "${artwork.title}". Awaiting NFT delivery from the seller.`,
-            isRead: false,
-            createdAt: serverTimestamp(),
-            link: `/artwork/${artwork.id}`
-        };
-
-        // 3. Execute all updates
-        await update(ref(database), updates);
-
-        toast({
-            title: 'Payment Successful!',
-            description: `The seller has been notified. Please wait for them to transfer the NFT.`
-        });
-
-    } catch (error: any) {
-        console.error("Purchase failed:", error);
-        if (error.code === 'INSUFFICIENT_FUNDS') {
-            toast({ variant: 'destructive', title: 'Insufficient Funds', description: 'You do not have enough ETH in your wallet to complete this transaction.' });
-        } else if (error.code === 'CALL_EXCEPTION') {
-             toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
-        } else {
-            toast({ variant: 'destructive', title: 'Purchase Failed', description: error?.reason || 'The transaction could not be completed.'});
-        }
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const handleConfirmDelivery = async () => {
-    if (!currentUser || !currentUserProfile || !currentUserProfile.walletAddress || !artwork || !artwork.contractAddress || !artwork.tokenId) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Missing required information to confirm delivery.'});
-        return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-        const verification = await verifyNftOwnership({
-            walletAddress: currentUserProfile.walletAddress,
-            tokenId: artwork.tokenId,
-            contractAddress: artwork.contractAddress,
-        });
-
-        if (!verification.isOwner) {
-            toast({ variant: 'destructive', title: 'NFT Not Received', description: 'We could not verify that the NFT is in your wallet. Please try again after the transfer is complete on the blockchain.' });
-            setIsProcessing(false);
-            return;
-        }
-
-        // NFT is confirmed in buyer's wallet, finalize the sale.
-        const saleRecordRef = push(ref(database, `artworks/${artwork.id}/saleHistory`));
-        const saleRecord: SaleRecord = {
-          price: artwork.price!,
-          timestamp: serverTimestamp(),
-          fromOwnerId: artwork.ownerId,
-          toOwnerId: currentUser.uid,
-        };
-
-        const updates: {[key: string]: any} = {};
-        updates[`/artworks/${artwork.id}/saleHistory/${saleRecordRef.key}`] = saleRecord;
-        updates[`/artworks/${artwork.id}/ownerId`] = currentUser.uid;
-        updates[`/artworks/${artwork.id}/ownerName`] = currentUserProfile.name || 'Anonymous';
-        updates[`/artworks/${artwork.id}/moderationStatus`] = 'approved';
-        updates[`/artworks/${artwork.id}/buyerId`] = null;
-        updates[`/users/${currentUser.uid}/collectionCount`] = increment(1);
-
-        await update(ref(database), updates);
-        
-        toast({ title: 'Delivery Confirmed!', description: `You are now the new owner of "${artwork.title}".` });
-        router.push('/collection');
-
-    } catch(error: any) {
-        console.error('Confirmation error:', error);
-        toast({ variant: 'destructive', title: 'Confirmation Failed', description: 'An unexpected error occurred.' });
-    } finally {
-        setIsProcessing(false);
     }
   };
 
@@ -388,7 +199,6 @@ export default function ArtworkDetailPage() {
         toast({ variant: 'destructive', title: 'Could not share', description: 'An error occurred while trying to share.' });
       }
     } else {
-      // Fallback for browsers that do not support the Web Share API
       try {
         await navigator.clipboard.writeText(window.location.href);
         toast({ title: 'Link Copied!', description: 'Artwork link has been copied to your clipboard.' });
@@ -461,7 +271,6 @@ export default function ArtworkDetailPage() {
     }
   };
 
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -484,24 +293,20 @@ export default function ArtworkDetailPage() {
 
   const isAdmin = currentUserProfile?.role === 'Administrator' || currentUserProfile?.role === 'Super-Administrator';
   const isOwner = currentUserProfile?.uid === artwork.ownerId;
-  const isArtist = currentUserProfile?.uid === artwork.artistId;
-  const isBuyer = currentUserProfile?.uid === artwork.buyerId;
   const isSupplyStore = currentUserProfile?.role === 'Supply Store';
-  const canEdit = isOwner;
-  const canPurchase = artwork.isForSale && !artwork.ownershipMismatch && !!currentUser && !isAdmin && !isOwner;
-  const priceInEth = ethPrice && artwork.price ? (artwork.price / ethPrice).toFixed(4) : '...';
 
-  const getPurchaseButtonText = () => {
-    if (!ethPrice) return 'Loading Price...';
-    if (artwork.moderationStatus === 'awaiting_delivery') return 'Awaiting Delivery';
-    if (!artwork.isForSale) return 'Not for Sale';
-    if (artwork.ownershipMismatch) return 'Listing Unavailable';
-    if (!currentUser) return 'Log in to purchase';
-    if (isAdmin) return 'Administrators cannot purchase';
-    if (isOwner) return 'You own this asset';
-    if (!owner?.walletAddress) return 'Owner wallet not set';
-    return `Buy - $${artwork.price} (~${priceInEth} ETH)`;
-  }
+  const isOnChainPublished = !!artwork.isForSale || !!artwork.isDigitalAsset;
+  const blockchainUrl = getTokenExplorerUrl(artwork.blockchain, artwork.contractAddress, artwork.tokenId);
+  const ipfsUrl = artwork.ipfsGatewayUrl || getIpfsGatewayUrl(artwork.ipfsHash);
+  const viewOnChainUrl = blockchainUrl || ipfsUrl;
+
+  const handleViewOnChain = () => {
+    if (!viewOnChainUrl || !artwork) {
+      toast({ variant: 'destructive', title: 'Link Unavailable', description: 'This artwork has no blockchain reference yet.' });
+      return;
+    }
+    window.open(viewOnChainUrl, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="grid lg:grid-cols-3 gap-8">
@@ -529,42 +334,6 @@ export default function ArtworkDetailPage() {
           )}
           <div className="absolute inset-0 bg-transparent"></div>
         </div>
-
-        {/* Provenance Section */}
-        {artwork.isDigitalAsset && saleHistory.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <History /> Provenance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {saleHistory.map((sale, index) => (
-                <div key={index} className="flex items-center gap-4 text-sm">
-                  {sale.fromOwner ? (
-                      <Link href={`/${sale.fromOwner.username}`} className="flex items-center gap-2 hover:text-primary">
-                        <Avatar className="h-8 w-8"><AvatarImage src={sale.fromOwner.avatarUrl} /><AvatarFallback><User /></AvatarFallback></Avatar>
-                        <span>{sale.fromOwner.name}</span>
-                      </Link>
-                  ) : <span>Previous Owner</span>}
-                  
-                  <div className="flex-grow text-center">
-                    <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground"/>
-                    <p className="text-xs text-muted-foreground">${sale.price.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(sale.timestamp), 'PP')}</p>
-                  </div>
-
-                  {sale.toOwner ? (
-                      <Link href={`/${sale.toOwner.username}`} className="flex items-center gap-2 hover:text-primary">
-                        <Avatar className="h-8 w-8"><AvatarImage src={sale.toOwner.avatarUrl} /><AvatarFallback><User /></AvatarFallback></Avatar>
-                        <span>{sale.toOwner.name}</span>
-                      </Link>
-                  ) : <span>New Owner</span>}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Comments Section */}
         <div className="space-y-6">
@@ -678,7 +447,7 @@ export default function ArtworkDetailPage() {
                 <UserPlus className="mx-auto h-8 w-8 text-primary" />
                 <h3 className="mt-2 font-semibold">Join to see more!</h3>
                 <p className="text-sm text-muted-foreground">
-                <Link href="/signup" className="text-primary underline">Sign up</Link> or <Link href="/login" className="text-primary underline">log in</Link> to view artist details and purchase this artwork.
+                <Link href="/signup" className="text-primary underline">Sign up</Link> or <Link href="/login" className="text-primary underline">log in</Link> to view artist details.
                 </p>
             </div>
         )}
@@ -733,12 +502,12 @@ export default function ArtworkDetailPage() {
                   </span>
                   {artwork.ipfsHash && (
                     <a
-                      href={`https://ipfs.io/ipfs/${artwork.ipfsHash}`}
+                      href={blockchainUrl || artwork.ipfsGatewayUrl || getIpfsGatewayUrl(artwork.ipfsHash) || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline flex items-center gap-1"
                     >
-                      Gateway IPFS <ExternalLink className="h-3 w-3" />
+                      Ver en explorer <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
                 </div>
@@ -766,31 +535,21 @@ export default function ArtworkDetailPage() {
              {artwork.ownershipMismatch && (
                  <div className="mb-4 p-3 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5" />
-                    <p className="text-xs font-medium">Ownership verification failed. This item is temporarily unavailable.</p>
+                    <p className="text-xs font-medium">Ownership verification failed. This item could not be verified on-chain.</p>
                  </div>
              )}
-             {artwork.moderationStatus === 'awaiting_delivery' ? (
-                isBuyer ? (
-                     <Button size="lg" className="w-full text-lg" onClick={handleConfirmDelivery} disabled={isProcessing}>
-                        {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCheck />}
-                        {isProcessing ? 'Confirming...' : 'Confirm Delivery'}
-                     </Button>
-                ) : (
-                    <Button size="lg" className="w-full text-lg" disabled={true} variant="outline">
-                        <Clock className="mr-2" />
-                        Awaiting Buyer Confirmation
-                    </Button>
-                )
-             ) : (
-                artwork.isForSale && (
-                  <Button size="lg" className="w-full text-lg" disabled={!canPurchase || isProcessing || !owner?.walletAddress || !ethPrice} onClick={handlePurchase}>
-                      {isProcessing ? <Loader2 className="animate-spin" /> : <Wallet />}
-                      {isProcessing ? 'Processing...' : getPurchaseButtonText()}
-                  </Button>
-                )
+             {isOnChainPublished && (
+                 <Button size="lg" className="w-full text-lg" onClick={handleViewOnChain} disabled={!viewOnChainUrl}>
+                    {viewOnChainUrl ? <ExternalLink /> : <AlertTriangle />}
+                    {viewOnChainUrl ? 'View on Blockchain' : 'Blockchain Link Unavailable'}
+                 </Button>
              )}
             <p className="text-center text-xs text-muted-foreground mt-2">
-              {canPurchase ? "By purchasing, you acquire this digital asset." : (artwork.isForSale ? "This asset is not available for you to purchase at this time." : "")}
+              {isOnChainPublished
+                ? (viewOnChainUrl
+                    ? "Opens the published artwork on its blockchain explorer. Inkfinity does not handle NFT transactions."
+                    : "This artwork has no blockchain reference yet.")
+                : ""}
             </p>
         </div>
       </div>
