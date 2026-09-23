@@ -66,9 +66,9 @@ export default function ArtworkCard({ artwork, currentUserProfile }: ArtworkCard
       toast({ variant: 'destructive', title: 'Please log in to like artwork.' });
       return;
     }
-    
+
     if (isLiked) {
-        return;
+      return;
     }
 
     if (currentUser.uid === artwork.artistId) {
@@ -79,37 +79,24 @@ export default function ArtworkCard({ artwork, currentUserProfile }: ArtworkCard
     setIsLiked(true);
     setLikeCount(prev => prev + 1);
 
-    const updates: { [key: string]: any } = {};
-    updates[`/artworks/${artwork.id}/likes/${currentUser.uid}`] = true;
-    updates[`/artworks/${artwork.id}/likesCount`] = increment(1);
-    updates[`/users/${currentUser.uid}/likedArtworks/${artwork.id}`] = true;
-    updates[`/users/${artwork.artistId}/points`] = increment(10);
-
-    const notificationsRef = ref(database, `users/${artwork.artistId}/notifications`);
-    const notificationId = push(notificationsRef).key;
-
-    if (notificationId) {
-      const newNotification: Omit<Notification, 'id'> = {
-        type: 'like',
-        fromUserId: currentUser.uid,
-        fromUserName: currentUserProfile.name || 'A user',
-        message: `${currentUserProfile.name || 'A new user'} liked your artwork: "${artwork.title}".`,
-        isRead: false,
-        createdAt: serverTimestamp(),
-        link: `/artwork/${artwork.id}`
-      };
-      updates[`/users/${artwork.artistId}/notifications/${notificationId}`] = newNotification;
-    }
-
     try {
-      await update(ref(database), updates);
+      const res = await fetch(`/api/artworks/${artwork.id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.uid }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Like could not be registered.');
+      }
     } catch (error) {
-      console.error("Like transaction failed: ", error);
+      console.error('Like request failed: ', error);
       setIsLiked(false);
       setLikeCount(prev => prev - 1);
-      toast({ variant: "destructive", title: "An error occurred." });
+      toast({ variant: 'destructive', title: 'An error occurred.' });
     }
   };
+
 
   const isSupplyStore = currentUserProfile?.role === 'Supply Store';
   const isAdmin = currentUserProfile?.role === 'Administrator' || currentUserProfile?.role === 'Super-Administrator';

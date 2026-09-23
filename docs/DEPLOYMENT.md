@@ -32,6 +32,8 @@ Necesarias (valores idénticos a los de `.env.local`):
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | (del proyecto) |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | (del proyecto) |
 | `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | (address del contrato) |
+| `RPC_AMOY_URL` / `RPC_POLYGON_URL` | (server-side) RPC endpoints para re-verificar txHash on-chain | 
+| `PLATFORM_WALLET_ADDRESS` | (server-side) wallet de la plataforma (fallback de `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS`) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | 16-hex-chars del dashboard de Reown (ver §1.5 abajo) |
 
 **Cómo configurarlas** (dos opciones):

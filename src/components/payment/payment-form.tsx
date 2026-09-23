@@ -132,7 +132,8 @@ export default function PaymentForm() {
         setIsProcessing(true);
 
         try {
-            if (fee > 0) {
+            let txHash: string | null = null;
+                if (fee > 0) {
                 const signer = await provider.getSigner();
                 
                 const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
@@ -147,27 +148,29 @@ export default function PaymentForm() {
                 }
 
                 const tx = await signer.sendTransaction(txParams);
+                txHash = tx.hash;
 
                 toast({ title: "Transaction Sent", description: "Waiting for blockchain confirmation..." });
                 await tx.wait();
             }
 
-            const userUpdates: { [key: string]: any } = {};
-            const userRefPath = `/users/${user.uid}`;
-            userUpdates[`${userRefPath}/status`] = 'active';
-            userUpdates[`${userRefPath}/paymentDate`] = new Date().toISOString();
-
-            if (user.role === 'Tattoo Artist') {
-                userUpdates[`${userRefPath}/trialEndsAt`] = add(new Date(), { years: 1 }).toISOString();
+            // Membership activation is done SERVER-SIDE at /api/verify-payment.
+            // The client no longer writes status/paymentDate/trialEndsAt/referral
+            // fields directly (RTDB rules block those writes for non-admins and
+            // the server re-verifies the txHash on-chain before activating).
+            const verifyRes = await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user.uid,
+                    txHash: txHash,
+                    network: settings?.network || 'amoy',
+                }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyData.success) {
+                throw new Error(verifyData.error || 'Payment verification failed.');
             }
-
-            if (discountApplied && referral) {
-                userUpdates[`${userRefPath}/referralCodeUsed`] = true;
-                userUpdates[`${userRefPath}/referredBy`] = referral.referrerId;
-            }
-
-            // The backend function will now handle rewarding the admin.
-            await update(ref(database), userUpdates);
             
             let successMessage = 'Your account is now active. Welcome to Inkfinity!';
             if(user.role === 'Tattoo Artist') {

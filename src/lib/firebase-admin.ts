@@ -8,6 +8,8 @@
 //     App Hosting provides automatically through the project's service account.
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
+import { getAuth } from 'firebase-admin/auth';
+import { getDatabase } from 'firebase-admin/database';
 
 const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 

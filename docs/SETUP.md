@@ -93,6 +93,18 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS=
+# Server-side (NO NEXT_PUBLIC — nunca exponer en el bundle del cliente):
+# Ticket dellas RPC: el server (verify-payment) recalcula el fee con settings +
+# descuento de referido y verifica el txHash on-chain ANTES de activar.
+# Si no se configuran, usa fallbacks públicos documentados en src/app/api/verify-payment/route.ts.
+RPC_AMOY_URL=https://rpc-amoy.polygon.technology
+RPC_POLYGON_URL=https://polygon-rpc.com
+# Dirección de la wallet de la plataforma (server-side). Si se omite, se usa
+# NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS como entrada "tx.to" esperada.
+PLATFORM_WALLET_ADDRESS=
+# Fee base por rol (opcional; override de platform_settings.artistMembershipTiers.tier1 / etc.)
+ARTIST_MEMBERSHIP_TIER1_FEE_ETH=
+STUDIO_REGISTRATION_FEE_ETH=
 # Reown AppKit (WalletConnect) - optional, enables mobile wallet connect (see docs/DEPLOYMENT.md §1.5)
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 # Optional - overrides the AppKit metadata.url (defaults to https://inkfinity-2d470.web.app)
