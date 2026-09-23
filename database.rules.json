@@ -48,15 +48,6 @@
         "referralCodeUsedDate": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
         },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
         "referralCode": {
           ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
         },
@@ -66,21 +57,7 @@
         "referralCount": {
           ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != ''"
         },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralEarnings": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))",
-          ".read": true
-        },
         "isActiveForGeofencing": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralEarnings": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))",
-          ".read": true
-        },
-        "referralPayouts": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
         },
         "referralCodeOwned": {
@@ -89,117 +66,7 @@
         "referralCodeCorrect": {
           ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
         },
-        "referralCodeUsed": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
-        },
-        "referralCodeUsedBy": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.val() === auth.uid"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
         "referralPayoutsDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralEarnings": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))",
-          ".read": true
-        },
-        "referralPayouts": {
-          ".read": true,
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".read": true,
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".read": true,
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsed": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralCodeUsedDate": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
-        },
-        "referralPayouts": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
         }
       }
@@ -212,7 +79,13 @@
     },
     "artworks": {
       ".read": true,
-      ".indexOn": ["artistId", "ownerId", "likesCount", "isForSale", "moderationStatus"],
+      ".indexOn": [
+        "artistId",
+        "ownerId",
+        "likesCount",
+        "isForSale",
+        "moderationStatus"
+      ],
       "$artworkId": {
         ".write": "auth != null && ((!data.exists() && newData.child('artistId').val() === auth.uid) || (data.child('ownerId').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
         ".validate": "newData.hasChildren(['title', 'imageUrl', 'artistId', 'ownerId', 'createdAt'])",
@@ -226,7 +99,9 @@
     },
     "comments": {
       ".read": true,
-      ".indexOn": ["createdAt"],
+      ".indexOn": [
+        "createdAt"
+      ],
       "$artworkId": {
         "$commentId": {
           ".write": "auth != null && ((!data.exists() && newData.child('userId').val() === auth.uid) || data.child('userId').val() === auth.uid)",
@@ -236,7 +111,10 @@
     },
     "bookings": {
       ".read": "auth != null && ( (query.orderByChild == 'clientId' && query.equalTo == auth.uid) || (query.orderByChild == 'artistId' && query.equalTo == auth.uid) || root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator' )",
-      ".indexOn": ["clientId", "artistId"],
+      ".indexOn": [
+        "clientId",
+        "artistId"
+      ],
       "$bookingId": {
         ".read": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
         ".write": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
@@ -245,7 +123,10 @@
     },
     "reviews": {
       ".read": true,
-      ".indexOn": ["revieweeId", "bookingId"],
+      ".indexOn": [
+        "revieweeId",
+        "bookingId"
+      ],
       "$reviewId": {
         ".write": "auth != null && !data.exists() && newData.child('authorId').val() === auth.uid",
         ".validate": "newData.hasChildren(['bookingId', 'rating', 'authorId', 'revieweeId', 'createdAt'])"
@@ -270,7 +151,10 @@
       }
     },
     "chats": {
-      ".indexOn": ["lastMessage/timestamp", "participants"],
+      ".indexOn": [
+        "lastMessage/timestamp",
+        "participants"
+      ],
       "$chatId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).exists()",
         ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).exists()) || data.child('participants').child(auth.uid).exists())"
