@@ -1,10 +1,23 @@
 // src/lib/blockchain.ts
 
-export type NetworkName = 'amoy' | 'polygon';
+export type NetworkName = 'amoy' | 'polygon' | 'worldchain' | 'worldchainSepolia';
+
+/**
+ * Human-facing symbol for each supported network's native asset.
+ * WorldChain settles in WLD (native gas+value token); Polygon/Amoy use MATIC.
+ */
+export const NETWORK_TOKEN_SYMBOL: Record<NetworkName, string> = {
+  amoy: 'MATIC',
+  polygon: 'MATIC',
+  worldchain: 'WLD',
+  worldchainSepolia: 'WLD',
+};
 
 export const EXPLORER_TOKEN_URL: Record<NetworkName, string> = {
   amoy: 'https://amoy.polygonscan.com/token',
   polygon: 'https://polygonscan.com/token',
+  worldchain: 'https://worldscan.org/token', // WorldChain explorer (token+tokenId via ?a=)
+  worldchainSepolia: 'https://sepolia.worldscan.org/token', // WorldChain Sepolia explorer (token+tokenId via ?a=)
 };
 
 /**

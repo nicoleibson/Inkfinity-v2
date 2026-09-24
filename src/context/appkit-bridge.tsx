@@ -4,12 +4,14 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAppKit, useAppKitAccount, useAppKitNetwork, useAppKitProvider, useDisconnect, createAppKit } from "@reown/appkit/react";
 import { EthersAdapter } from "@reown/appkit-adapter-ethers";
-import { polygon, polygonAmoy, type AppKitNetwork } from "@reown/appkit/networks";
+import { polygon, polygonAmoy, worldchain, worldchainSepolia, type AppKitNetwork } from "@reown/appkit/networks";
 import type { Eip1193Provider } from "ethers";
 
 export const SUPPORTED_APPKIT_NETWORKS: Record<string, AppKitNetwork> = {
   polygon,
   amoy: polygonAmoy,
+  worldchain,
+  worldchainSepolia,
 };
 
 export interface AppKitBridgeState {
@@ -41,7 +43,7 @@ function ensureAppKit() {
         url: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-2d470.web.app",
         icons: [],
       },
-      networks: [polygon, polygonAmoy],
+      networks: [polygon, polygonAmoy, worldchain, worldchainSepolia],
       projectId,
       features: {
         analytics: false,

@@ -8,6 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import type { UserProfile, Notification } from '@/types/user';
 import type { Referral } from '@/types/referral';
 import { usePlatformSettings } from '@/hooks/usePlatformSettings';
+import { NETWORK_TOKEN_SYMBOL } from '@/lib/blockchain';
 import { useWallet } from '@/context/wallet-provider';
 import { ref, get, update, serverTimestamp, push, increment } from 'firebase/database';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ export default function PaymentForm() {
     const { toast } = useToast();
     const { settings, loading: loadingSettings } = usePlatformSettings();
     const { walletAddress, connectWallet, provider, isConnected } = useWallet();
+    const tokenSymbol = NETWORK_TOKEN_SYMBOL[settings?.network as keyof typeof NETWORK_TOKEN_SYMBOL] ?? 'WLD';
     
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -188,7 +190,7 @@ export default function PaymentForm() {
         } catch (error: any) {
             console.error("Payment failed:", error);
             if (error.code === 'INSUFFICIENT_FUNDS') {
-                toast({ variant: 'destructive', title: 'Insufficient Funds', description: 'You do not have enough ETH in your wallet to complete this transaction.' });
+                toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to complete this transaction.` });
             } else if (error.code === 'CALL_EXCEPTION') {
                  toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
             } else {
@@ -202,7 +204,8 @@ export default function PaymentForm() {
     const { fee, originalFee, discount, title, description } = getPaymentDetails();
 
     if (loadingUser || loadingSettings) {
-        return (
+          const tokenSymbol = NETWORK_TOKEN_SYMBOL[settings?.network as keyof typeof NETWORK_TOKEN_SYMBOL] ?? NETWORK_TOKEN_SYMBOL['worldchain'];
+return (
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
@@ -246,7 +249,7 @@ export default function PaymentForm() {
                     {discount > 0 && (
                         <p className="text-sm text-muted-foreground line-through">${originalFee.toFixed(2)}</p>
                     )}
-                    <p className="text-4xl font-bold text-primary">{fee.toFixed(4)} ETH</p>
+                    <p className="text-4xl font-bold text-primary">{fee.toFixed(4)} {tokenSymbol}</p>
                      {discount > 0 && (
                         <p className="text-sm text-green-500 font-semibold flex items-center justify-center gap-1">
                             <CheckCircle className="h-4 w-4"/>
@@ -267,7 +270,7 @@ export default function PaymentForm() {
                 {isConnected ? (
                     <Button className="w-full" size="lg" onClick={handlePayment} disabled={isProcessing || !PLATFORM_WALLET_ADDRESS}>
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wallet className="mr-2 h-4 w-4"/>}
-                        {isProcessing ? 'Processing Payment...' : `Pay ${fee.toFixed(4)} ETH Now`}
+                        {isProcessing ? 'Processing Payment...' : `Pay ${fee.toFixed(4)} ${tokenSymbol} Now`}
                     </Button>
                 ) : (
                     <Button className="w-full" size="lg" onClick={connectWallet}>

@@ -11,10 +11,19 @@ const PLATFORM_WALLET = (process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS || proc
 const RPC_FALLBACK: Record<string, string> = {
   amoy: 'https://rpc-amoy.polygon.technology',
   polygon: 'https://polygon-rpc.com',
+  worldchain: 'https://worldchain-mainnet.g.alchemy.com/public',
+  worldchainSepolia: 'https://worldchain-sepolia.g.alchemy.com/public',
 };
 
 function resolveRpc(network: string): string {
-  const envKey = network === 'amoy' ? 'RPC_AMOY_URL' : 'RPC_POLYGON_URL';
+  const envKey =
+    network === 'amoy'
+      ? 'RPC_AMOY_URL'
+      : network === 'worldchain'
+        ? 'RPC_WORLDCHAIN_URL'
+        : network === 'worldchainSepolia'
+          ? 'RPC_WORLDCHAIN_SEPOLIA_URL'
+          : 'RPC_POLYGON_URL';
   return (process.env[envKey] || '').trim() || RPC_FALLBACK[network] || '';
 }
 
