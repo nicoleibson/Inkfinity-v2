@@ -37,7 +37,7 @@ const statusConfig: Record<BookingStatus, { label: string; color: string; icon: 
 
 export function BookingList({ bookings, perspective, currentUser }: BookingListProps) {
   const { toast } = useToast();
-  const { provider, connectWallet, isConnected } = useWallet();
+  const { provider, connectWallet, isConnected, walletAddress } = useWallet();
   const { settings } = usePlatformSettings();
   const [payingBookingId, setPayingBookingId] = useState<string | null>(null);
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
@@ -123,7 +123,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
     
     try {
         const depositInEth = booking.depositAmount / ethPrice;
-        const signer = await provider.getSigner();
+        const signer = await provider.getSigner(walletAddress ?? undefined);
 
         const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
             to: booking.artistWalletAddress,
@@ -192,7 +192,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         setUpdatingBookingId(booking.id);
         try {
             const depositInEth = booking.depositAmount / ethPrice;
-            const signer = await provider.getSigner();
+            const signer = await provider.getSigner(walletAddress ?? undefined);
 
             const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
                 to: booking.clientWalletAddress, // Refund to client

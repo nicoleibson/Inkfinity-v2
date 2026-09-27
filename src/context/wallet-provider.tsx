@@ -88,6 +88,20 @@ const chainParams = {
         nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
         rpcUrls: ['https://rpc-amoy.polygon.technology/'],
         blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+    },
+    worldchain: {
+        chainId: '0x1E0', // 480
+        chainName: 'World Chain',
+        nativeCurrency: { name: 'WLD', symbol: 'WLD', decimals: 18 },
+        rpcUrls: ['https://worldchain-mainnet.g.alchemy.com/public'],
+        blockExplorerUrls: ['https://worldscan.org/'],
+    },
+    worldchainSepolia: {
+        chainId: '0x12C1', // 4801
+        chainName: 'World Chain Sepolia',
+        nativeCurrency: { name: 'WLD', symbol: 'WLD', decimals: 18 },
+        rpcUrls: ['https://worldchain-sepolia.g.alchemy.com/public'],
+        blockExplorerUrls: ['https://sepolia.worldscan.org/'],
     }
 };
 
@@ -191,7 +205,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
     const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
 
-    const network = settings?.network || 'amoy';
+    const network = settings?.network || 'worldchainSepolia';
     const targetChain = chainParams[network];
 
     try {
@@ -290,7 +304,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         setWalletAddress(nextAddress);
         setProvider(new BrowserProvider(nextProvider));
 
-        const networkName = settings?.network || 'amoy';
+        const networkName = settings?.network || 'worldchainSepolia';
         appkitSwitchNetworkRef.current?.(networkName).catch(() => {});
 
         if (!wasConnected) {

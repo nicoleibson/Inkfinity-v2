@@ -17,7 +17,7 @@ export type ColorScheme = {
 }
 
 export type PlatformSettings = {
-  network: 'polygon' | 'amoy';
+  network: 'polygon' | 'amoy' | 'worldchain' | 'worldchainSepolia';
   lastNftSync?: string;
   studioRegistrationFee?: number;
   supplyStoreRegistrationFee?: number;
@@ -45,7 +45,7 @@ export function usePlatformSettings() {
         if (snapshot.exists()) {
           setSettings(snapshot.val());
         } else {
-          setSettings({ network: 'amoy' }); // default settings
+          setSettings({ network: 'worldchainSepolia' }); // default settings (WorldChain Sepolia — WLD)
         }
         setLoading(false);
       }, 

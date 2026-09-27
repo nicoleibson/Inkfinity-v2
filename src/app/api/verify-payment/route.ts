@@ -38,7 +38,7 @@ export function POST(request: NextRequest) {
 
     const txHash = (body?.txHash || '').toString().trim();
     const userId = (body?.userId || '').toString().trim();
-    const network = (body?.network || 'amoy').toString().trim();
+    const network = (body?.network || 'worldchainSepolia').toString().trim();
 
     if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
       return NextResponse.json({ success: false, error: 'A valid txHash is required.' }, { status: 400 });
@@ -46,8 +46,8 @@ export function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ success: false, error: 'userId is required.' }, { status: 400 });
     }
-    if (network !== 'amoy' && network !== 'polygon') {
-      return NextResponse.json({ success: false, error: 'network must be "amoy" or "polygon".' }, { status: 400 });
+    if (network !== 'amoy' && network !== 'polygon' && network !== 'worldchain' && network !== 'worldchainSepolia') {
+      return NextResponse.json({ success: false, error: 'network must be "amoy", "polygon", "worldchain" or "worldchainSepolia".' }, { status: 400 });
     }
 
     const rpcUrl = resolveRpc(network);

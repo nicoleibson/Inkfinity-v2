@@ -136,7 +136,7 @@ export default function PaymentForm() {
         try {
             let txHash: string | null = null;
                 if (fee > 0) {
-                const signer = await provider.getSigner();
+                const signer = await provider.getSigner(walletAddress ?? undefined);
                 
                 const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
                     to: PLATFORM_WALLET_ADDRESS,
@@ -166,7 +166,7 @@ export default function PaymentForm() {
                 body: JSON.stringify({
                     userId: user.uid,
                     txHash: txHash,
-                    network: settings?.network || 'amoy',
+                    network: settings?.network || 'worldchainSepolia',
                 }),
             });
             const verifyData = await verifyRes.json();
