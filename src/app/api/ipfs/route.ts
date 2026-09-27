@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       name: title || "Inkfinity Digital Art NFT",
       description: description || "Authentic digital tattoo and art NFT on Inkfinity",
       image: `ipfs://${imageCid}`,
-      external_url: (process.env.NEXT_PUBLIC_SITE_URL as string) || "https://inkfinity.site",
+      external_url: (process.env.NEXT_PUBLIC_SITE_URL as string) || "https://inkfinity-ten.vercel.app",
       attributes: [
         { trait_type: "Artist", value: artistName || "Inkfinity Creator" },
         ...(tags && Array.isArray(tags) ? [{ trait_type: "Tags", value: tags.join(", ") }] : []),

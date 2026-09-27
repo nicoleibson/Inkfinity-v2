@@ -19,6 +19,8 @@ import { parseEther, parseUnits } from 'ethers';
 import { ReviewDialog } from '@/components/reviews/review-dialog';
 import { getCryptoPrice } from '@/ai/flows/get-crypto-price-flow';
 import { usePlatformSettings } from '@/hooks/usePlatformSettings';
+import { isInWorldApp, sendWorldAppTransaction } from '@/lib/world-app';
+import { NETWORK_TOKEN_SYMBOL } from '@/lib/blockchain';
 
 
 interface BookingListProps {
@@ -39,6 +41,8 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
   const { toast } = useToast();
   const { provider, connectWallet, isConnected, walletAddress } = useWallet();
   const { settings } = usePlatformSettings();
+  const bookingNetwork = isInWorldApp() ? 'worldchain' : settings?.network;
+  const tokenSymbol = NETWORK_TOKEN_SYMBOL[bookingNetwork as keyof typeof NETWORK_TOKEN_SYMBOL] ?? 'WLD';
   const [payingBookingId, setPayingBookingId] = useState<string | null>(null);
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -123,6 +127,18 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
     
     try {
         const depositInEth = booking.depositAmount / ethPrice;
+
+        if (isInWorldApp()) {
+            const userOp = await sendWorldAppTransaction({
+                to: booking.artistWalletAddress as string,
+                valueWei: parseEther(depositInEth.toFixed(18)),
+            });
+            toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
+            await handleUpdateStatus(booking.id, 'confirmed', { paymentTxHash: userOp.userOpHash });
+            toast({ title: 'Payment Confirmed!', description: 'Your booking is confirmed. Transaction: ' + userOp.userOpHash.slice(0, 10) + '...' });
+            return;
+        }
+
         const signer = await provider.getSigner(walletAddress ?? undefined);
 
         const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
@@ -146,7 +162,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
     } catch (error: any) {
         console.error("Payment failed:", error);
         if (error.code === 'INSUFFICIENT_FUNDS') {
-            toast({ variant: 'destructive', title: 'Insufficient Funds', description: 'You do not have enough ETH in your wallet to complete this transaction.' });
+            toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to complete this transaction.` });
         } else if (error.code === 'CALL_EXCEPTION') {
              toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
         } else {
@@ -192,6 +208,18 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         setUpdatingBookingId(booking.id);
         try {
             const depositInEth = booking.depositAmount / ethPrice;
+
+            if (isInWorldApp()) {
+                const userOp = await sendWorldAppTransaction({
+                    to: booking.clientWalletAddress as string,
+                    valueWei: parseEther(depositInEth.toFixed(18)),
+                });
+                toast({ title: 'Refund Sent', description: 'Waiting for blockchain confirmation...' });
+                await handleUpdateStatus(booking.id, 'cancelled', { cancellationTxHash: userOp.userOpHash });
+                toast({ title: 'Booking Cancelled', description: 'The deposit has been refunded.' });
+                return;
+            }
+
             const signer = await provider.getSigner(walletAddress ?? undefined);
 
             const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
@@ -215,7 +243,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         } catch (error: any) {
             console.error("Cancellation/Refund failed:", error);
             if (error.code === 'INSUFFICIENT_FUNDS') {
-                toast({ variant: 'destructive', title: 'Insufficient Funds', description: 'You do not have enough ETH in your wallet to process the refund.' });
+                toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to process the refund.` });
             } else if (error.code === 'CALL_EXCEPTION') {
                  toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The refund transaction is likely to fail. Please check your wallet balance and network, then try again.' });
             } else {

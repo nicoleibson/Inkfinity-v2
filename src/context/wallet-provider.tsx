@@ -10,6 +10,7 @@ import { ref, update, query, orderByChild, equalTo, get } from "firebase/databas
 import { onAuthStateChanged } from "firebase/auth";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
 import { appkitEnabled } from "@/context/appkit";
+import { ensureMiniKitInstalled, getWorldAppProviderOrNull, isInWorldApp } from "@/lib/world-app";
 import type { AppKitBridgeState, AppKitBridgeActions } from "./appkit-bridge";
 
 // Resilient dynamic loader with retry to guard against transient network/chunk failures
@@ -136,6 +137,7 @@ async function linkWalletToAccount(newAddress: string): Promise<{ ok: boolean; i
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    ensureMiniKitInstalled();
     setMounted(true);
   }, []);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -181,6 +183,42 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     if (!currentUser) {
         toast({ variant: "destructive", title: "Not Logged In", description: "You must be logged in to connect a wallet." });
         return;
+    }
+
+    // Inside World App: connect via the native MiniKit bridge (SIWE).
+    ensureMiniKitInstalled();
+    const worldAppProvider = getWorldAppProviderOrNull();
+    if (worldAppProvider) {
+      try {
+        const browserProvider = new BrowserProvider(worldAppProvider);
+        const accounts = (await browserProvider.send("eth_requestAccounts", [])) as string[];
+        if (accounts.length > 0) {
+          const newAddress = accounts[0];
+          const { ok, inUse } = await linkWalletToAccount(newAddress);
+          if (!ok) {
+            toast({
+              variant: "destructive",
+              title: inUse ? "Wallet In Use" : "Wallet Connection Failed",
+              description: inUse ? "This wallet address is already linked to another account." : "Could not link the wallet to your profile. Please try again.",
+            });
+            return;
+          }
+          setWalletAddress(newAddress);
+          setProvider(browserProvider);
+          toast({
+            title: "Wallet Connected & Saved",
+            description: `Address ${newAddress.slice(0,6)}...${newAddress.slice(-4)} is now linked to your profile.`,
+          });
+        }
+      } catch (error) {
+        console.error("Error connecting via World App:", error);
+        toast({
+          variant: "destructive",
+          title: "Wallet Connection Failed",
+          description: "Could not connect to the World App wallet. Please try again.",
+        });
+      }
+      return;
     }
 
     if (appkitEnabled && appkitOpenRef.current) {
@@ -406,7 +444,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         isConnected: !!walletAddress && !!provider
       }}
     >
-      {mounted && appkitEnabled && (
+      {mounted && appkitEnabled && !isInWorldApp() && (
         <Suspense fallback={null}>
           <AppKitErrorBoundary onError={() => { appkitOpenRef.current = null; }}>
             <AppKitBridge onState={handleAppkitState} onActions={handleAppkitActions} />

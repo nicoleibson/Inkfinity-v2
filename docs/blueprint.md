@@ -25,7 +25,7 @@
 - Administrative Panels: Admins can manage users, including handling artist upgrade requests.
 - Administrative Panels: A backend function for Super-Admins to reconcile database users with Firebase Authentication.
 - Administrative Panels: Super-Admins manage a vault for artworks from deleted users or those with NFT ownership issues.
-- Administrative Panels: Super-Admins can toggle between blockchain networks (e.g., Polygon Mainnet and Amoy Testnet).
+- Administrative Panels: Super-Admins can toggle between blockchain networks (e.g., WorldChain Mainnet and WorldChain Sepolia).
 - Security Features: Role-based access control (RBAC) enforced by Firebase Rules.
 - Security Features: Re-authentication required for sensitive admin actions.
 - Security Features: Automated account locking for unverified emails or expired trials.

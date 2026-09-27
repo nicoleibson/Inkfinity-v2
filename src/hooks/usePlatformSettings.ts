@@ -45,7 +45,7 @@ export function usePlatformSettings() {
         if (snapshot.exists()) {
           setSettings(snapshot.val());
         } else {
-          setSettings({ network: 'worldchainSepolia' }); // default settings (WorldChain Sepolia — WLD)
+          setSettings({ network: 'worldchain' }); // default settings (WorldChain mainnet — WLD)
         }
         setLoading(false);
       }, 

@@ -1,92 +1,94 @@
 # Inkfinity Deployment Guide
 
-Guía práctica para desplegar la plataforma en **Firebase App Hosting** con HTTPS y dejar funcionando la verificación facial 2FA (cámara + liveness + email link).
+Guía práctica para desplegar la plataforma en **Vercel** (hosting web) con **Firebase** como backend de datos/auth, y dejar funcionando la verificación facial 2FA (cámara + liveness + email link) y los pagos en WorldChain.
 
-> **Por qué HTTPS es obligatorio:** la cámara (`getUserMedia`), la criptografía del navegador (`crypto.subtle`) y el email link de Firebase Auth solo funcionan sobre contextos seguros. `localhost` está exento (por eso `npm run dev` funciona). En un iPhone conectado por LAN con `http://192.168.x.x:9002` la cámara está bloqueado — es el error `Camera Not Supported Here`.
+> **Arquitectura de despliegue actual:**
+> - **Vercel** → aplicación Next.js (`https://inkfinity-ten.vercel.app`). Es el único hosting válido.
+> - **Firebase** → Authentication, Realtime Database y las *security rules* de DB/Storage. **No** sirve el web app.
+> - El bloque `hosting` que sigue en `firebase.json` es legacy: **no** ejecutar `firebase deploy --only hosting`.
+
+> **Por qué HTTPS es obligatorio:** la cámara (`getUserMedia`), la criptografía del navegador (`crypto.subtle`), el SIWE de World App y el email link de Firebase Auth solo funcionan sobre contextos seguros. `localhost` está exento (por eso `npm run dev` funciona). En un iPhone conectado por LAN con `http://192.168.x.x:3000` la cámara está bloqueada — es el error `Camera Not Supported Here`.
 
 ---
 
 ## 0. Requisitos previos
 
-- Proyecto en Firebase: `inkfinity-2d470`
-- Firebase CLI instalado: `firebase --version`
-- Backend de App Hosting creado (`apphosting.yaml` ya existe en la raíz)
-- Secret `GEMINI_API_KEY` creado en Google Cloud / App Hosting (ya mapeado en `apphosting.yaml`)
+- Node.js con el repo clonado y `npm install` ejecutado.
+- Proyecto de Firebase: `inkfinity-2d470` (ver `.firebaserc`).
+- Firebase CLI: `firebase --version` (solo para las rules).
+- Proyecto en **Vercel** conectado al repo, con el dominio canónico `inkfinity-ten.vercel.app` asignado.
+- App creada en <https://developer.world.org> si se quiere usar World App / MiniKit.
+- WorldChain Mainnet como red de producción en `platform_settings` (ver §5).
 
 ---
 
-## 1. Variables de entorno de build (App Hosting)
+## 1. Variables de entorno (Vercel)
 
-App Hosting **no lee `.env.local`**. Las variables `NEXT_PUBLIC_*` se incrustan en el bundle en **tiempo de build**, así que deben existir en el backend antes de desplegar.
+Vercel **no lee `.env.local`**. Las variables `NEXT_PUBLIC_*` se incrustan en el bundle en **tiempo de build**, así que deben existir en el proyecto **antes** de desplegar.
 
-Necesarias (valores idénticos a los de `.env.local`):
+Configúralas en **Vercel → Project → Settings → Environment Variables**, marcadas para **Production**, **Preview** y **Development**:
 
-| Variable | Ejemplo |
-| --- | --- |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | `AIza...` |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `inkfinity-2d470.firebaseapp.com` |
-| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | `https://inkfinity-2d470-default-rtdb.firebaseio.com` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `inkfinity-2d470` |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | (del proyecto) |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | (del proyecto) |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | (del proyecto) |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | (del proyecto) |
-| `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | (address del contrato) |
-| `RPC_AMOY_URL` / `RPC_POLYGON_URL` | (server-side) RPC endpoints para re-verificar txHash on-chain | 
-| `PLATFORM_WALLET_ADDRESS` | (server-side) wallet de la plataforma (fallback de `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS`) |
-| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | 16-hex-chars del dashboard de Reown (ver §1.5 abajo) |
+| Variable | Scope | Valor / Ejemplo |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | public | `https://inkfinity-ten.vercel.app` |
+| `NEXT_PUBLIC_WORLD_APP_ID` | public | `app_...` (Developer Portal) |
+| `WORLD_RP_ID` | server | `rp_...` (solo World ID / IDKit) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | public | `AIza...` |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | public | `inkfinity-2d470.firebaseapp.com` |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | public | `https://inkfinity-2d470-default-rtdb.firebaseio.com` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | public | `inkfinity-2d470` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | public | (del proyecto) |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | public | (del proyecto) |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | public | (del proyecto) |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | public | (del proyecto) |
+| `NEXT_PUBLIC_GEMINI_API_KEY` | public | (del proyecto) |
+| `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | public | wallet de tesorería **en WorldChain** |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | public | 16-hex-chars del dashboard de Reown (§1.5) |
+| `PLATFORM_WALLET_ADDRESS` | server | misma wallet; fallback del público |
+| `RPC_WORLDCHAIN_URL` | server | RPC de WorldChain mainnet (ver `route.ts` para fallbacks) |
+| `RPC_WORLDCHAIN_SEPOLIA_URL` | server | RPC de WorldChain Sepolia (opcional) |
+| `FIREBASE_CLIENT_EMAIL` | server | service account para escrituras admin en RTDB |
+| `FIREBASE_PRIVATE_KEY` | server | clave privada del service account (con `\n` literales) |
+| `GEMINI_API_KEY` | server | Genkit AI |
 
-**Cómo configurarlas** (dos opciones):
+> **Importante:** añadir una variable nueva a un proyecto ya desplegado **no** la hace disponible en el bundle sin un **rebuild**. Tras cambiar cualquier `NEXT_PUBLIC_*`, redeploy (rebuild), no basta con un restart.
 
-**A. App Hosting (recomendada).**
-En la consola de Firebase → App Hosting → backend → **Variables** añade cada una como **environment variable** (no secret; son públicas para el SDK web). `GEMINI_API_KEY` ya está como secret vía `apphosting.yaml`.
-
-**B. En la interfaz web de App Hosting**, o desde CLI:
-
-```bash
-firebase apphosting:backends:update <backend> --project inkfinity-2d470
-```
+> **Las URLs de Firebase no son de hosting.** `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` y `..._DATABASE_URL` apuntan a `firebaseapp.com` / `firebaseio.com` a propósito; no se cambian al migrar a Vercel.
 
 ### 1.5 Reown AppKit / WalletConnect (billeteras móviles)
 
-La app usa **Reown AppKit** (WalletConnect) para conectar billeteras desde Android/iOS (deep link a la app de la billetera o escaneo de QR). Necesita un **Project ID** (público por diseño, va embebido en el bundle).
+Se usa **Reown AppKit** (WalletConnect) para conectar billeteras desde Android/iOS (deep link o QR). El Project ID es público por diseño (va embebido en el bundle).
 
-**Estado:** el Project ID ya está creado y configurado en `.env.local`:
-
-```bash
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=fedf6cd812a74a885931241545a8120d
-```
-
-Pasos para llevarlo a producción:
-
-1. **Si algún día quisieras recrear el proyecto:** crea uno en <https://dashboard.reown.com> (rellena nombre y URL; para cloud déjalo vacío) y copia su Project ID.
-2. **App Hosting** (según §1): en Firebase console → App Hosting → backend → **Variables**, añade como environment variable
-   `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=fedf6cd812a74a885931241545a8120d`
-   (idéntica a `.env.local`; App Hosting no lee `.env.local`).
-   Desde la consola; para los antiguos backends equivale a `firebase apphosting:backends:update <backend> --project inkfinity-2d470`.
-3. **Dominios permitidos en Reown**: en Reown Dashboard → tu proyecto → **App Configuration / Domains**, añade:
-   - `inkfinity-2d470.web.app`
-   - `ssrinkfinity2d470-no4spoqgaq-uc.a.run.app` (o el dominio de tu backend de App Hosting)
+1. Crear el proyecto en <https://dashboard.reown.com> (nombre y URL; para cloud déjalo vacío) y copiar su Project ID.
+2. Añadir `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` en Vercel (ver §1) y **rebuild**.
+3. **Dominios permitidos en Reown** (Reown Dashboard → proyecto → *App Configuration / Domains*):
+   - `inkfinity-ten.vercel.app`
    - `localhost` (desarrollo)
-   - Cualquier dominio personalizado.
-4. **Desplegar** con la variable presente (paso 3 del README) para que el Project ID quede incrustado.
+   - Cualquier dominio personalizado adicional.
+4. El `metadata.url` de AppKit (`src/context/appkit-bridge.tsx`) usa `NEXT_PUBLIC_SITE_URL`; debe coincidir con el dominio desplegado porque la Verify API de Reown lo compara.
 
-> El `metadata.url` de AppKit (en `src/context/appkit.tsx`) debe coincidir con tu dominio (lo usa la Verify API de Reown). Se puede sobrescribir con `NEXT_PUBLIC_SITE_URL`.
+> Sin Project ID la app **no rompe**: "Connect Wallet" cae al flujo por extensiones (`window.ethereum`).
 
-> Sin Project ID (o si se borra del env) la app **no rompe**: el botón "Connect Wallet" cae al flujo antiguo por extensiones (`window.ethereum`). Con Project ID, el modal de AppKit (QR / deep links móviles) reemplaza ese flujo automáticamente.
+### 1.6 Worldcoin Developer Portal (World App / MiniKit)
+
+Para que la app funcione **dentro de la World App**:
+
+1. En <https://developer.world.org>, usar la app asociada a `NEXT_PUBLIC_WORLD_APP_ID`.
+2. **Registrar el dominio canónico `inkfinity-ten.vercel.app`** en la lista de dominios/allowlist de la app. MiniKit deriva el `domain` y el `uri` del SIWE de `window.location`, y la World App rechaza cualquier dominio no registrado. Sin este paso el login SIWE falla aunque el código sea correcto.
+3. Habilitar las capacidades necesarias: **MiniKit (walletAuth)**, envío de transacciones y `sendTransaction`.
+4. Si se usa World ID / IDKit, registrar también el `rp_id` (`WORLD_RP_ID`).
+
+Ver `docs/ADVANCED_INTEGRATIONS.md` para el flujo de userOperations y `docs/TROUBLESHOOTING.md` para errores típicos de SIWE.
 
 ---
 
 ## 2. Dominios autorizados en Firebase Auth
 
-Requisito de `sendSignInLinkToEmail` (el fallback por email link).
+Requisito de `sendSignInLinkToEmail` (fallback por email link).
 
 1. Consola de Firebase → **Authentication** → **Settings** → **Authorized domains**
-2. Añade:
-   - `inkfinity-2d470.web.app`
-   - `inkfinity-2d470.firebaseapp.com`
-   - El dominio del backend de App Hosting: `ssrinkfinity2d470-no4spoqgaq-uc.a.run.app` (o el que muestre tu backend)
-   - Cualquier dominio personalizado que uses
+2. Añade `inkfinity-ten.vercel.app` (y cualquier dominio personalizado que uses).
+3. `inkfinity-2d470.web.app` y `inkfinity-2d470.firebaseapp.com` pueden permanecer por compatibilidad, pero ya no sirven la web app.
 
 `localhost` ya está autorizado por defecto (desarrollo).
 
@@ -94,60 +96,70 @@ Requisito de `sendSignInLinkToEmail` (el fallback por email link).
 
 ## 3. Desplegar (obtener HTTPS)
 
-App Hosting te da una URL `https://` automáticamente. Dos formas:
+El deploy web es **Vercel**, no Firebase. Next.js se auto-detecta; el script `build` del repo ya sube la memoria (`NODE_OPTIONS='--max-old-space-size=1536'`) porque el bundle (AppKit + MiniKit) es pesado.
 
-**Vista previa (para probar ahora en el iPhone):**
+**Opción A — Git (recomendada):** conectar el repo en Vercel con el branch `main`. Cada push dispara build y deploy; los domains se asignan en *Project → Settings → Domains*.
 
-```bash
-firebase apphosting:channels:deploy preview --project inkfinity-2d470
-```
-
-**Producción:**
+**Opción B — CLI de Vercel:**
 
 ```bash
-firebase deploy --only apphosting --project inkfinity-2d470
+npm i -g vercel
+vercel link
+vercel env pull .env.local   # opcional: trae las vars del proyecto
+vercel --prod
 ```
 
-Si prefieres Firebase Hosting + framework backend (`frameworksBackend` ya está en `firebase.json`):
+> **No** añadir un `vercel.json` con `buildCommand` / `installCommand` / `cleanUrls` a mano: sobreescribe la configuración del proyecto y puede romper el deploy. Si el build se queda sin memoria, súbelo en *Project → Settings → Environment Variables* con `NODE_OPTIONS=--max-old-space-size=4096`.
+
+**Reglas de Firebase (independientes del hosting):**
 
 ```bash
-firebase deploy --only hosting --project inkfinity-2d470
+firebase deploy --only database --project inkfinity-2d470
+firebase deploy --only storage  --project inkfinity-2d470
 ```
-
-Tras el despliegue, abre la URL `https://` desde el iPhone y verifica:
-1. Cámara activa (sin error "Camera Not Supported Here").
-2. Liveness + verificación facial completa.
-3. Email link de respaldo abre en otro dispositivo (el email viaja en la URL del link).
 
 ---
 
 ## 4. Verificación post-despliegue
 
-Checklist rápido:
-
-- [ ] `/` carga sin errores de Firebase (si Firebase no inicializó, falta el paso 1)
-- [ ] `/verify-face` abre la cámara en iPhone/escritorio
-- [ ] `/settings` → activar 2FA facial → registrar rostro → verificar
-- [ ] Botón "Email me a secure link" envía correo y el link completa la verificación **desde otro dispositivo**
-- [ ] 3 intentos fallidos activan el bloqueo (`facialAttempts` en RTDB)
-- [ ] Server Actions funcionan desde el dominio desplegado (si da `Invalid Server Actions request`, revisar `serverActions.allowedOrigins` en `next.config.js`)
-- [ ] Con `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` configurado: en el móvil, "Connect Wallet" abre el modal de AppKit y el deep link salta a la app de la billetera (o QR); en escritorio sigue funcionando con extensiones
-- [ ] Build local no muere por memoria (si ocurre, el script `build` ya incluye `NODE_OPTIONS=--max-old-space-size=4096`)
+- [ ] `https://inkfinity-ten.vercel.app` carga sin errores de Firebase.
+- [ ] `/verify-face` abre la cámara en iPhone/escritorio.
+- [ ] `/settings` → activar 2FA facial → registrar rostro → verificar.
+- [ ] "Email me a secure link" envía correo y el link completa la verificación **desde otro dispositivo**.
+- [ ] 3 intentos fallidos activan el bloqueo (`facialAttempts` en RTDB).
+- [ ] **Server Actions funcionan** desde el dominio desplegado. Si aparece `Invalid Server Actions request`, falta el dominio en `experimental.serverActions.allowedOrigins` de `next.config.js` (ahí debe estar `inkfinity-ten.vercel.app`).
+- [ ] "Connect Wallet" en móvil abre el modal de AppKit con deep link o QR (si `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` está definido).
+- [ ] La red efectiva es **WorldChain Mainnet** (símbolo WLD) en `/admin` y en el badge del navbar.
+- [ ] `/api/ipfs` genera metadatos con `external_url` = `https://inkfinity-ten.vercel.app`.
+- [ ] Dentro de la World App: la conexión pide firma SIWE y el pago devuelve `userOpHash`.
 
 ---
 
-## 5. Pruebas sin desplegar (HTTPS temporal)
+## 5. Red de producción: WorldChain Mainnet
 
-Si aún no quieres desplegar pero necesitas HTTPS para tu teléfono:
+La red se controla con `platform_settings.network` en Realtime Database (el valor guardado **prevalece** sobre el default del código):
+
+- `/admin` → *Platform Settings* → **Network = WorldChain Mainnet** → Save.
+- Default en `src/hooks/usePlatformSettings.ts`: `worldchain`.
+- Redes soportadas: `worldchain` (480, producción), `worldchainSepolia` (4801, pruebas), `polygon`, `amoy`.
+- Token nativo: **WLD** en WorldChain, MATIC en Polygon/Amoy.
+
+> `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` debe ser una dirección **existente y con saldo en WorldChain**; si no, los pagos revertirán. Verifícala en <https://worldscan.org>.
+
+---
+
+## 6. Pruebas sin desplegar (HTTPS temporal)
+
+Si aún no quieres desplegar pero necesitas HTTPS en el teléfono:
 
 ```bash
 # Con cloudflared (túnel de Cloudflare)
-cloudflared tunnel --url http://localhost:9002
+cloudflared tunnel --url http://localhost:3000
 # Con ngrok
-ngrok http 9002
+ngrok http 3000
 ```
 
-Usa la URL `https://…` resultante en el iPhone.
+> La URL del túnel cambia en cada ejecución: si la pruebas dentro de la World App, tendrás que añadirla a la allowlist del Developer Portal o usar el dominio canónico de Vercel.
 
 ---
 
@@ -155,3 +167,4 @@ Usa la URL `https://…` resultante en el iPhone.
 
 - `next.config.js` tiene `typescript.ignoreBuildErrors: true` y `eslint.ignoreDuringBuilds: true`. Para un feature de seguridad conviene arreglar los errores TS pre-existentes y activarlos (el build fallará si hay errores).
 - El email va incrustado en la URL del link de respaldo (`?email=…`). Es seguro (el `oobCode` debe coincidir con ese email), pero si lo consideras otro punto de filtración, se puede sustituir por el flujo con `isSignInWithEmailLink` + `signInWithEmailLink` comprobando la origin.
+- **Verificación de pagos World App pendiente de endurecer.** El pipeline actual de userOperations (ERC-4337) consulta el Developer Portal una sola vez y las reservas se marcan como confirmadas antes de la verificación on-chain. Ver el aviso en `docs/ADVANCED_INTEGRATIONS.md` antes de habilitarlo en producción con fondos reales.

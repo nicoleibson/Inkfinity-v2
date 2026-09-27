@@ -28,8 +28,17 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-ten.vercel.app"),
   title: "Inkfinity",
   description: "A platform for tattoo artists and enthusiasts.",
+  openGraph: {
+    type: "website",
+    siteName: "Inkfinity",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-ten.vercel.app",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

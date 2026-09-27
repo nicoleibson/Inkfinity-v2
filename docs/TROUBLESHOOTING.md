@@ -10,7 +10,7 @@ This document provides solutions for common problems you might encounter while d
 Activating facial verification shows a camera error and no preview ever appears. On a phone (e.g. iPhone) this typically shows as "Camera Not Supported Here" or simply "no device".
 
 ### Cause
-The most common cause is **opening the app over HTTP** instead of HTTPS. Browsers only expose `navigator.mediaDevices` to secure contexts (HTTPS or `localhost`). Opening `http://192.168.x.x:9002` from a phone over your LAN hits this immediately.
+The most common cause is **opening the app over HTTP** instead of HTTPS. Browsers only expose `navigator.mediaDevices` to secure contexts (HTTPS or `localhost`). Opening `http://192.168.x.x:3000` from a phone over your LAN hits this immediately.
 
 Other causes, in order of frequency:
 1. **Insecure context (HTTP)** — `getUserMedia` is not available at all.
@@ -18,7 +18,7 @@ Other causes, in order of frequency:
 3. **Camera already in use** — another application (video call, etc.) holds the device.
 
 ### Solution
-- Use **HTTPS**: deploy to App Hosting (`docs/DEPLOYMENT.md`) or run `cloudflared tunnel --url http://localhost:9002` / `ngrok http 9002` and open the `https://` URL on the phone.
+- Use **HTTPS**: production is already on Vercel (`https://inkfinity-ten.vercel.app`), or run `cloudflared tunnel --url http://localhost:3000` / `ngrok http 3000` and open the `https://` URL on the phone (see `docs/DEPLOYMENT.md`).
 - Check the browser/OS camera permissions and reload the page.
 - Close apps using the camera.
 - Uses `src/lib/client/camera.ts`, which detects the specific cause and shows a **targeted toast + persistent banner with a "Try Again" button** (`face-verifier.tsx`, `settings/page.tsx`). Read the banner text: it tells you which of the cases above it is.
@@ -31,7 +31,7 @@ Other causes, in order of frequency:
 Clicking "Email me a secure link" and then the emailed link shows an error on `/verify-face/email-link`.
 
 ### Cause / Solution
-1. **Domain not authorized:** `sendSignInLinkToEmail` requires the app to run on an **authorized domain** (Firebase Console → Authentication → Settings → Authorized domains). Add your deployed/App Hosting domains.
+1. **Domain not authorized:** `sendSignInLinkToEmail` requires the app to run on an **authorized domain** (Firebase Console → Authentication → Settings → Authorized domains). Add `inkfinity-ten.vercel.app`.
 2. **Different device/browser:** the legacy flow required the same browser tab (email stored in `localStorage`). This is now **supported**: the email is embedded in the link URL, so opening it on another device works — as long as account settings match and the link is fresh.
 3. **Already-verified session:** if the login was already completed, the link is single-use. Request a new one from `/verify-face`.
 
@@ -46,15 +46,15 @@ Server actions (`verifyFace`, `geocodeAddress`) are rejected with a `Next 400 / 
 Next.js only accepts Server Action requests from origins listed in `serverActions.allowedOrigins` in `next.config.js`. The deployed domain is missing.
 
 ### Solution
-Add the production origin(s) to `serverActions.allowedOrigins` in `next.config.js`:
+Add the production origin(s) to `serverActions.allowedOrigins` in `next.config.js`. As of this writing the list already includes `inkfinity-ten.vercel.app` and `*.vercel.app`:
 
 ```js
 serverActions: {
-  allowedOrigins: ["your-domain.example", "https-app-host.r.appspot.com", "*.web.app"],
+  allowedOrigins: ["inkfinity-ten.vercel.app", "*.vercel.app", "localhost:3000"],
 },
 ```
 
-Then rebuild and redeploy.
+Then rebuild and redeploy — changing `next.config.js` always requires a **rebuild**, not just a redeploy.
 
 ---
 
@@ -75,17 +75,83 @@ Follow these steps to add the current URL to your Reown project's allowlist:
 
 2.  **Select Your Project:** Log in and select the project for this application (project ID `fedf6cd812a74a885931241545a8120d`).
 
-3.  **Go to App Configuration:** Open **App Configuration → Domains** (este es el allowlist de Reown; el proyecto de Reown Cloud ya recoge estas entradas).
+3.  **Go to App Configuration:** Open **App Configuration → Domains** (este es el allowlist de Reown).
 
 4.  **Add the Origin URL:**
     *   Find the section named **Allowed Domains** (o **Allowed Origins**).
-    *   Añade el host de la URL actual (ej. `ssrinkfinity2d470-no4spoqgaq-uc.a.run.app`, `inkfinity-2d470.web.app`).
+    *   Añade `inkfinity-ten.vercel.app` y, si pruebas en otro host, también ese host (ej. el dominio de un túnel).
 
 5.  **Add Localhost (Recommended):** While you are here, it's a good idea to also add your local development URL so you can run the project on your own machine in the future:
     ```
-    localhost:9002
+    localhost:3000
     ```
 
 6.  **Save and Refresh:** Save the changes on the Reown dashboard. Then, return to your development workspace tab and **refresh the page**. The wallet connection should now work correctly.
 
-> Si el error aparece solo en un túnel puntual (cloudflared/ngrok), el dominio cambia en cada lanzamiento: añade el host de ese túnel o usa el flujo sin Project ID (que cae a `window.ethereum`, sin requirenir de Reown).
+> Si el error aparece solo en un túnel puntual (cloudflared/ngrok), el dominio cambia en cada lanzamiento: añade el host de ese túnel o usa el flujo sin Project ID (que cae a `window.ethereum`, sin requerír de Reown).
+
+---
+
+## "no such account" al enviar una transacción (web / MetaMask)
+
+### Problem
+`BrowserProvider` / `JsonRpcSigner` lanza `no such account` (o `could not coalesce error`) al firmar, aunque la wallet esté conectada y con saldo.
+
+### Cause
+El navegador puede exponer varias cuentas (`eth_accounts`) mientras `ethers` tiene cacheada otra distinta, o la cuenta cacheada pertenece a una red diferente a la esperada.
+
+### Solution
+Pasa siempre la dirección explícitamente al pedir el signer:
+
+```ts
+const signer = provider.getSigner(walletAddress ?? undefined);
+```
+
+Este patrón ya está aplicado en `src/components/payment/payment-form.tsx` y en los flujos de depósito/reembolso de `src/components/bookings/booking-list.tsx`. Si reintroduces un `getSigner()` sin argumento, el bug vuelve a aparecer.
+
+---
+
+## World App: la conexión falla o el SIWE se rechaza
+
+### Problem
+Dentro de la World App, "Connect Wallet" no conecta, o MiniKit lanza un error de dominio / challenge inválido.
+
+### Cause
+1. **Dominio no registrado en el Developer Portal.** MiniKit deriva el `domain` y el `uri` del SIWE de `window.location`. Si el host actual no está en la allowlist de tu app, la World App rechaza la firma.
+2. **App ID ausente o incorrecto.** `MiniKit.install()` necesita `NEXT_PUBLIC_WORLD_APP_ID`; si falta, la inicialización falla y el provider no queda disponible.
+3. **Falta el rebuild.** Las variables `NEXT_PUBLIC_*` se incrustan en build: añadirlas en Vercel no cambia nada hasta redesplegar.
+4. **No estás dentro de la World App.** `isInWorldApp()` es false en un navegador normal; ahí el flujo correcto es AppKit, no MiniKit.
+
+### Solution
+- Registra `inkfinity-ten.vercel.app` en <https://developer.world.org> para el app de `NEXT_PUBLIC_WORLD_APP_ID`.
+- Confirma que `NEXT_PUBLIC_WORLD_APP_ID` está definida en Vercel y **rebuild**.
+- Para probar en local, `localhost` suele requerir una app de desarrollo habilitada en el portal.
+- Diagnóstico: dentro de la World App debe existir `window.WorldApp` y el badge de red debe mostrar **WorldChain / WLD**.
+
+---
+
+## World App: el pago devuelve `userOpHash` y la verificación no completa
+
+### Problem
+El pago se firma correctamente en la World App, pero la membresía o la reserva no se activan, o el servidor responde `202`.
+
+### Cause
+Dentro de la World App los pagos son **ERC-4337 userOperations**: `MiniKit.sendTransaction` devuelve un `userOpHash` (no un `txHash`) y no se puede hacer `tx.wait()`. La resolución se hace contra:
+
+```
+GET https://developer.world.org/api/v2/minikit/userop/{userOpHash}
+```
+
+que responde `pending`, `failed` o un `transaction_hash` final. Además, las transacciones ERC-4337 apuntan al **EntryPoint** con `value = 0`, así que validar el `tx.to` / `tx.value` de la transacción superior **no** describe lo que el usuario firmó.
+
+### Solution / estado actual
+`/api/verify-payment` acepta `txHash` (web) o `userOpHash` (World App) y responde `202` (pendiente), `422` (fallido) o `200` (éxito).
+
+Limitaciones conocidas — **no actives pagos reales en la World App hasta corregirlas**:
+- La consulta se hace **una sola vez**, sin polling: un userOp todavía `pending` devuelve `202` y el cliente no reintenta, así que el usuario paga sin obtener la membresía.
+- Tras resolver, las comprobaciones leen la transacción superior, no la userOp (sender/recipient/importe no se validan de forma fiable).
+- En `booking-list.tsx` los depósitos/reembolsos se marcan confirmados de inmediato, sin verificación server-side.
+
+Arreglo requerido: validar sender, recipient e importe desde la respuesta del userOp, hacer polling hasta estado terminal y solo entonces activar la membresía o cambiar el estado de la reserva.
+
+> No resuelvas userOperations con un RPC público: los RPC públicos de WorldChain rechazan `eth_getUserOperationByHash` (Alchemy responde `401: Only core evm requests are allowed.`).

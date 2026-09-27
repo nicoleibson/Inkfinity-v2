@@ -40,7 +40,7 @@ function ensureAppKit() {
       metadata: {
         name: "Inkfinity",
         description: "Inkfinity – tattoo art marketplace",
-        url: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-2d470.web.app",
+        url: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-ten.vercel.app",
         icons: [],
       },
       networks: [polygon, polygonAmoy, worldchain, worldchainSepolia],

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Wallet, ShieldCheck, Gem, Tag, CheckCircle } from 'lucide-react';
 import { parseEther, parseUnits } from 'ethers';
+import { isInWorldApp, sendWorldAppTransaction } from '@/lib/world-app';
 import { add } from 'date-fns';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -27,7 +28,9 @@ export default function PaymentForm() {
     const { toast } = useToast();
     const { settings, loading: loadingSettings } = usePlatformSettings();
     const { walletAddress, connectWallet, provider, isConnected } = useWallet();
-    const tokenSymbol = NETWORK_TOKEN_SYMBOL[settings?.network as keyof typeof NETWORK_TOKEN_SYMBOL] ?? 'WLD';
+    // Inside World App the transaction settles on World Chain (native WLD).
+    const networkName = isInWorldApp() ? 'worldchain' : settings?.network;
+    const tokenSymbol = NETWORK_TOKEN_SYMBOL[networkName as keyof typeof NETWORK_TOKEN_SYMBOL] ?? 'WLD';
     
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -135,7 +138,16 @@ export default function PaymentForm() {
 
         try {
             let txHash: string | null = null;
+            let userOpHash: string | null = null;
                 if (fee > 0) {
+                if (isInWorldApp()) {
+                    const userOp = await sendWorldAppTransaction({
+                        to: PLATFORM_WALLET_ADDRESS as string,
+                        valueWei: parseEther(fee.toFixed(18)),
+                    });
+                    userOpHash = userOp.userOpHash;
+                    toast({ title: "Transaction Sent", description: "Waiting for blockchain confirmation..." });
+                } else {
                 const signer = await provider.getSigner(walletAddress ?? undefined);
                 
                 const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
@@ -154,6 +166,7 @@ export default function PaymentForm() {
 
                 toast({ title: "Transaction Sent", description: "Waiting for blockchain confirmation..." });
                 await tx.wait();
+                }
             }
 
             // Membership activation is done SERVER-SIDE at /api/verify-payment.
@@ -166,7 +179,8 @@ export default function PaymentForm() {
                 body: JSON.stringify({
                     userId: user.uid,
                     txHash: txHash,
-                    network: settings?.network || 'worldchainSepolia',
+                    userOpHash: userOpHash,
+                    network: networkName || 'worldchainSepolia',
                 }),
             });
             const verifyData = await verifyRes.json();

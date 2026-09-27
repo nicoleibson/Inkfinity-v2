@@ -94,6 +94,8 @@ const nextConfig = {
     webpackMemoryOptimizations: true,
     serverActions: {
       allowedOrigins: [
+        "inkfinity-ten.vercel.app",
+        "*.vercel.app",
         "inkfinity-2d470.web.app",
         "*.inkfinity-2d470.web.app",
         "ssrinkfinity2d470-no4spoqgaq-uc.a.run.app",

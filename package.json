@@ -40,6 +40,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@reown/appkit": "^1.8.23",
     "@reown/appkit-adapter-ethers": "^1.8.23",
+    "@worldcoin/minikit-js": "^2.0.3",
     "@x402/evm": "^2.25.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

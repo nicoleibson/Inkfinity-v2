@@ -28,7 +28,7 @@ This document provides a comprehensive overview of the security architecture and
 
 ### 2.1. Facial Scan Login (Optional 2FA)
 - **Biometric Verification:** Users can optionally enable Facial Scan Login as a second factor of authentication. After a successful password login, `login/page.tsx` redirects to `/verify-face` (when `twoFactorEnabled && facialScanUrl`), and `/settings` also allows registering/verifying the face.
-- **Secure Context Required:** Camera access (`getUserMedia`), liveness, and the crypto APIs only work over **HTTPS** (or `localhost`). Opening the app over HTTP (e.g. `http://192.168.x.x:9002` from a phone) is blocked by the browser — the UI surfaces this via `src/lib/client/camera.ts` diagnostics ("Camera Not Supported Here").
+- **Secure Context Required:** Camera access (`getUserMedia`), liveness, and the crypto APIs only work over **HTTPS** (or `localhost`). Opening the app over HTTP (e.g. `http://192.168.x.x:3000` from a phone) is blocked by the browser — the UI surfaces this via `src/lib/client/camera.ts` diagnostics ("Camera Not Supported Here").
 - **Multi-Layer Verification Chain:** The verification is not a single AI call. It is a pipeline of layered checks, each one sitting behind the previous, so the system does not rely on any single model:
   1. **Client-side face detection** (`src/lib/client/face-capture.ts`): MediaPipe `FaceDetector` (GPU with CPU fallback, local WASM) counts faces. 0 or >1 faces → rejected immediately.
   2. **Liveness / anti-spoofing** (`captureLiveSequence`): MediaPipe `FaceLandmarker` samples ~2.2s at ~9fps (input downscaled to 256px for low-end devices), requiring the face to stay visible (≥60% of samples) AND either a **blink** (`eyeBlinkLeft/Right ≥ 0.6`) or **natural 3D head motion** (≥ 4° pitch/yaw/roll). A static printed photo fails this. If the model is unavailable the check fails *open* ("unavailable").
@@ -71,5 +71,17 @@ This document provides a comprehensive overview of the security architecture and
 - **Automated Delisting:** If an artist has listed a real NFT for sale on the platform but no longer owns it in their linked wallet, the system automatically marks it with an `ownershipMismatch` flag and removes it from the marketplace to prevent fraudulent sales.
 
 ### 4.2. Segregated Blockchain Networks
-- **Production Safety:** A Super-Administrator can configure the entire platform to operate on either the **Polygon Mainnet** (for real-money transactions) or the **Amoy Testnet**.
-- **Risk Mitigation:** This ensures that development and testing can be done safely with test funds, preventing accidental use of real assets before the platform is ready for production. All wallet interactions and smart contract calls respect the globally configured network.
+- **Production Safety:** A Super-Administrator can configure the entire platform to operate on **WorldChain Mainnet** (chain ID 480, native token **WLD** — for real-money transactions), on **WorldChain Sepolia**, or on the legacy **Polygon Mainnet** / **Amoy Testnet**.
+- **Configuration source:** the active network is stored in `platform_settings.network` in Realtime Database and is set from `/admin`; the value persisted there takes precedence over the code default (`worldchain`). All wallet interactions and transaction verification respect the globally configured network.
+- **Risk Mitigation:** This ensures that development and testing can be done safely with test funds, preventing accidental use of real assets before the platform is ready for production.
+- **Native token per network:** payments are denominated in **WLD** on WorldChain and **MATIC** on Polygon/Amoy; the UI symbol follows the configured network.
+
+### 4.3. World App Authentication (SIWE)
+- **Native in-app auth:** inside the World App, authentication uses **Sign-In With Ethereum** through [Worldcoin MiniKit](https://docs.world.org/minikit) instead of a wallet-connection QR flow. The signature proves control of the account, and the SIWE `domain`/`uri` are derived from `window.location`, so the app only works on domains registered in the World Developer Portal.
+- **Domain allowlisting:** an unregistered domain causes the World App to reject the SIWE challenge, which prevents phishing of the signature on look-alike domains.
+- **Server-side API key handling:** MiniKit requires only a public App ID (`NEXT_PUBLIC_WORLD_APP_ID`); the Relying Party ID (`WORLD_RP_ID`) and any service credentials stay server-side and are never inlined in the client bundle.
+
+### 4.4. Payment Verification (⚠️ pending hardening)
+- **Server-side re-verification:** membership and booking payments are re-checked by `/api/verify-payment` before access is granted. The server recalculates the expected fee from `platform_settings` (including referral discounts) and never trusts a client-sent amount.
+- **Known limitation — World App / userOperations:** the ERC-4337 path is **not yet fully hardened** and must not be used with real funds until fixed. Specifically: the userOp is resolved with a single Developer Portal lookup (no polling, so a still-pending userOp returns `202` and the client never retries), the post-resolution on-chain checks read the **top-level transaction** (`tx.to` / `tx.value`) which for ERC-4337 points to the **EntryPoint** with `value = 0` and therefore does not represent what the user signed, and `src/components/bookings/booking-list.tsx` marks booking deposits and refunds as **confirmed without server-side verification**.
+- **Required fix:** validate sender, recipient and amount from the userOp/bundler response, poll until a terminal state, and only then activate the membership or flip the booking status. Tracked in `docs/ADVANCED_INTEGRATIONS.md`.

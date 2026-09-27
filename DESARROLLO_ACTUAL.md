@@ -15,7 +15,8 @@ La plataforma permite explorar portafolios, realizar reservas (bookings), establ
 *   **Base de Datos y Backend:** Firebase Realtime Database (Nodos JSON estructurados) y Firebase Authentication. *Nota: Firebase Storage fue eliminado por completo. Las imágenes de perfil y obras de arte se almacenan en la cuenta de Google Drive de cada usuario (carpeta "Inkfinity Artworks"), y las obras NFT se suben a IPFS. El módulo de almacenamiento se encuentra en `src/lib/google-drive.ts`.*
 *   **Inteligencia Artificial (Server-Side):** Google AI & Genkit (`@genkit-ai/google-genai`). Se usa para generación de biografías, tagging automático de imágenes, moderación de contenido y validación de 2FA facial (comparación de frames).
 *   **Inteligencia Artificial (Client-Side):** MediaPipe Tasks Vision (detección facial y liveness) y face-api.js (embeddings faciales) consumidos desde `/public/models/`.
-*   **Web3 y Blockchain:** Ethers.js (`^6.17.0`) y Reown AppKit (`@reown/appkit`) para conexión a wallets descentralizadas y manejo de depósitos en redes como Polygon (Amoy testnet).
+*   **Hosting:** Vercel (dominio canónico `https://inkfinity-ten.vercel.app`). Firebase se usa **solo** como backend (Authentication, Realtime Database y sus security rules); el web app **no** se sirve desde Firebase Hosting.
+*   **Web3 y Blockchain:** Ethers.js (`^6.17.0`), Reown AppKit (`@reown/appkit`) para wallets externas, y **Worldcoin MiniKit** (`@worldcoin/minikit-js`) con **SIWE** para pagos nativos dentro de la World App. La red de producción es **WorldChain Mainnet** (chain ID 480, token nativo **WLD**); también se soportan WorldChain Sepolia, Polygon y Amoy. La capa de integración está en `src/lib/world-app.ts`.
 
 ## 3. Arquitectura de Datos (Firebase Realtime Database)
 
@@ -62,7 +63,7 @@ Si vas a desarrollar o modificar características en este proyecto, DEBES adheri
 2.  **Next.js Server vs Client:** Recuerda que los componentes en `app/` son *Server Components* por defecto. Solo usa `"use client"` cuando haya interactividad (Hooks, eventos de clic, listeners en tiempo real de Firebase).
 3.  **Seguridad y Reglas DB:** Si alteras la estructura de datos que se lee o se guarda en Firebase (`push()`, `update()`), ASEGÚRATE de que estas acciones no rompan `database.rules.json`. Si agregas un nuevo nodo de datos, deberás prever actualizar las reglas.
 4.  **Imágenes y Almacenamiento:** Firebase Storage está **eliminado**. Todas las imágenes se suben a Google Drive del usuario (vía `src/lib/google-drive.ts`) o a IPFS para obras NFT (`src/lib/ipfs.ts`). No hay fallback a almacenamiento local. El archivo `src/lib/firebase/storage.ts` ya no existe.
-5.  **Web3:** Todo contrato o envío de tokens se hace por Reown AppKit + Ethers. Asegúrate de verificar las firmas.
+5.  **Web3:** Dentro de la World App los pagos pasan por **Worldcoin MiniKit + SIWE** (`src/lib/world-app.ts`) y son **userOperations ERC-4337**: devuelven `userOpHash`, no `txHash`, y no admiten `tx.wait()`. En la web normal se usa Reown AppKit + Ethers. Pasa siempre la dirección al `getSigner(walletAddress ?? undefined)` para evitar `no such account`, y verifica las firmas. **Pendiente de endurecer:** la verificación de userOps (polling y validación de sender/recipient/importe) antes de usar fondos reales — ver `docs/ADVANCED_INTEGRATIONS.md`.
 6.  **IA:** Todas las llamadas al modelo (Gemini) se deben realizar mediante **Server Actions** o **API Routes** (`/api/`) del lado del servidor para proteger la clave `GEMINI_API_KEY`. Nunca filtres esta clave al cliente.
 
 ---

@@ -81,7 +81,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     if (settings) {
-        setSelectedNetwork(settings.network || 'amoy');
+        setSelectedNetwork(settings.network || 'worldchain');
         setArtistFee(settings.artistMembershipTiers?.tier1 ?? '');
         setStudioFee(settings.studioRegistrationFee ?? '');
         setSupplyStoreFee(settings.supplyStoreRegistrationFee ?? '');
@@ -248,15 +248,15 @@ export default function AdminPanel() {
                 </p>
               </div>
               <div className="flex items-center gap-2 mt-4 sm:mt-0">
-                {selectedNetwork === 'polygon' ? (
+                {selectedNetwork === 'polygon' || selectedNetwork === 'worldchain' ? (
                   <div className="flex items-center gap-2 text-green-500 font-semibold">
                     <Wifi className="h-5 w-5" />
-                    <span>Polygon Mainnet</span>
+                    <span>{selectedNetwork === 'worldchain' ? 'WorldChain Mainnet' : 'Polygon Mainnet'}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-amber-500 font-semibold">
                     <WifiOff className="h-5 w-5" />
-                    <span>Amoy Testnet</span>
+                    <span>{selectedNetwork === 'worldchainSepolia' ? 'WorldChain Sepolia' : 'Amoy Testnet'}</span>
                   </div>
                 )}
               </div>
@@ -273,6 +273,8 @@ export default function AdminPanel() {
                   <SelectContent>
                     <SelectItem value="amoy">Amoy Testnet</SelectItem>
                     <SelectItem value="polygon">Polygon Mainnet</SelectItem>
+                    <SelectItem value="worldchainSepolia">WorldChain Sepolia</SelectItem>
+                    <SelectItem value="worldchain">WorldChain Mainnet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -287,7 +289,7 @@ export default function AdminPanel() {
           <Card className="p-4">
               <h3 className="text-md font-medium flex items-center gap-2 mb-4">
                   <Gem className="h-5 w-5" />
-                  Membership & Registration Fees (ETH)
+                  Membership & Registration Fees (WLD)
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">

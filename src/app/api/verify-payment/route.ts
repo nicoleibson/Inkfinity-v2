@@ -37,11 +37,12 @@ export function POST(request: NextRequest) {
     }
 
     const txHash = (body?.txHash || '').toString().trim();
+    const userOpHash = (body?.userOpHash || '').toString().trim();
     const userId = (body?.userId || '').toString().trim();
     const network = (body?.network || 'worldchainSepolia').toString().trim();
 
-    if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-      return NextResponse.json({ success: false, error: 'A valid txHash is required.' }, { status: 400 });
+    if (!/^0x[0-9a-fA-F]{64}$/.test(txHash) && !/^0x[0-9a-fA-F]{64}$/.test(userOpHash)) {
+      return NextResponse.json({ success: false, error: 'A valid txHash or userOpHash is required.' }, { status: 400 });
     }
     if (!userId) {
       return NextResponse.json({ success: false, error: 'userId is required.' }, { status: 400 });
@@ -57,12 +58,30 @@ export function POST(request: NextRequest) {
 
     const provider = new JsonRpcProvider(rpcUrl);
 
-    const tx = await provider.getTransaction(txHash);
+    // World App settles via ERC-4337 userOps: resolve the final on-chain tx hash
+    // via the Developer Portal before running the normal on-chain checks.
+    let effectiveTxHash = txHash;
+    if (userOpHash) {
+      const userOpRes = await fetch(`https://developer.world.org/api/v2/minikit/userop/${userOpHash}`);
+      if (!userOpRes.ok) {
+        return NextResponse.json({ success: false, error: 'Failed to verify the World App user operation.', code: 'USEROP_LOOKUP_FAILED' }, { status: 502 });
+      }
+      const userOp = await userOpRes.json();
+      if (userOp?.status === 'failed') {
+        return NextResponse.json({ success: false, error: 'The World App transaction failed on-chain. Payment NOT credited.', code: 'USEROP_FAILED' }, { status: 422 });
+      }
+      if (userOp?.status === 'pending' || !userOp?.transaction_hash) {
+        return NextResponse.json({ success: false, error: 'Transaction is pending (not yet confirmed).', code: 'TX_PENDING' }, { status: 202 });
+      }
+      effectiveTxHash = userOp.transaction_hash;
+    }
+
+    const tx = await provider.getTransaction(effectiveTxHash);
     if (!tx) {
       return NextResponse.json({ success: false, error: 'Transaction not found on-chain.', code: 'TX_NOT_FOUND' }, { status: 422 });
     }
 
-    const receipt = await provider.getTransactionReceipt(txHash);
+    const receipt = await provider.getTransactionReceipt(effectiveTxHash);
     if (!receipt) {
       return NextResponse.json({ success: false, error: 'Transaction is pending (not yet confirmed).', code: 'TX_PENDING' }, { status: 202 });
     }
@@ -117,7 +136,7 @@ export function POST(request: NextRequest) {
     const updates: Record<string, string> = {
       status: 'active',
       paymentDate: new Date().toISOString(),
-      paymentTxHash: txHash,
+      paymentTxHash: effectiveTxHash,
     };
     if (user.role === 'Tattoo Artist') {
       updates.trialEndsAt = add(new Date(), { years: 1 }).toISOString();
@@ -157,7 +176,7 @@ export function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, txHash });
+    return NextResponse.json({ success: true, txHash: effectiveTxHash });
   })().catch((error: unknown) => {
     console.error('verify-payment error:', error);
     const message = error instanceof Error ? error.message : 'Payment verification failed.';
