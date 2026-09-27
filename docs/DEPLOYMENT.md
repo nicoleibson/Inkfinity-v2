@@ -47,6 +47,9 @@ Configúralas en **Vercel → Project → Settings → Environment Variables**, 
 | `PLATFORM_WALLET_ADDRESS` | server | misma wallet; fallback del público |
 | `RPC_WORLDCHAIN_URL` | server | RPC de WorldChain mainnet (ver `route.ts` para fallbacks) |
 | `RPC_WORLDCHAIN_SEPOLIA_URL` | server | RPC de WorldChain Sepolia (opcional) |
+| `RPC_WORLDCHAIN_BUNDLER_URL` | server | **bundler** para verificar `to`/`value` exactos de una userOp |
+| `PRICE_API_BASE_URL` | server | fuente de precio para depósitos en USD (default: CoinGecko) |
+| `ALLOW_MOCK_PRICES` | server | `true` solo en local; habilita el precio fijo heredado |
 | `FIREBASE_CLIENT_EMAIL` | server | service account para escrituras admin en RTDB |
 | `FIREBASE_PRIVATE_KEY` | server | clave privada del service account (con `\n` literales) |
 | `GEMINI_API_KEY` | server | Genkit AI |
@@ -145,6 +148,68 @@ La red se controla con `platform_settings.network` en Realtime Database (el valo
 - Token nativo: **WLD** en WorldChain, MATIC en Polygon/Amoy.
 
 > `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` debe ser una dirección **existente y con saldo en WorldChain**; si no, los pagos revertirán. Verifícala en <https://worldscan.org>.
+
+### 5.1 Verificación de pagos (importante)
+
+Los pagos se verifican **server-side** en `/api/verify-payment` (membresías) y
+`/api/verify-booking-payment` (depósitos y reembolsos de reservas). Detalles del diseño en
+`docs/ADVANCED_INTEGRATIONS.md`.
+
+Para que funcionen correctamente en producción:
+
+1. **`RPC_WORLDCHAIN_BUNDLER_URL`** — endpoint de un bundler que soporte
+   `eth_getUserOperationByHash`. Los RPC públicos de WorldChain lo rechazan
+   (`401: Only core evm requests are allowed.`) y no hay bundler público para World Chain.
+   Sin esta variable la app **funciona**, pero los pagos de la World App se validan con un
+   chequeo de delta de saldo del receptor en lugar de `to`/`value` exactos (más conservador,
+   igual de sound). Configúrala para obtener la prueba exacta.
+2. **`PRICE_API_BASE_URL`** — fuente de precio para los depósitos de reserva (denominados en
+   USD). Si el servidor no consigue precio, responde `PRICE_UNAVAILABLE` y **no** liquida el
+   depósito. Default: CoinGecko simple price.
+3. **No** pongas `ALLOW_MOCK_PRICES=true` en producción: habilita el precio fijo heredado.
+
+> Las membresías se cobran en unidades cripto directamente configuradas en `platform_settings`, así que no necesitan fuente de precio.
+
+### 5.2 Desplegar las reglas de base de datos
+
+`database.rules.json` incluye las reglas que impiden liquidar pagos desde el navegador
+(`paymentTxHash`, `cancellationTxHash`, `depositConfirmedAt`, `refundConfirmedAt`,
+`depositAmount` y el paso a `status: 'confirmed'`). **Sin desplegarlas, la verificación
+server-side es evadible.** Requieren credenciales válidas del Firebase CLI:
+
+```bash
+firebase login --reauth
+firebase deploy --only database --project inkfinity-2d470
+```
+
+> Para probar las reglas localmente hace falta Java (emulador de RTDB). Con Java instalado:
+>
+> ```bash
+> npm run test:rules    # = firebase emulators:exec --only database "node scripts/test-booking-rules.mjs"
+> ```
+>
+> Son 27 asserts que comprueban, **con el mismo patrón de escritura que usa la app**
+> (`update(ref(db), { '/bookings/...': ... })`), que un cliente o un artista no pueden
+> liquidar una reserva por su cuenta, no pueden escribir ni borrar los campos de
+> liquidación, no pueden bajar `depositAmount`, y que los flujos legítimos (crear reserva,
+> cancelar, aceptar, subir el depósito) siguen funcionando. Un PATCH en `/bookings` se
+> evalúa de forma distinta a uno en `/bookings/<id>`: probar con la ruta equivocada da
+> falsos negativos, así que no edites las rutas de los asserts sin comprobar los
+> `update(` del código de la app.
+
+#### Bugs que encontró este test
+
+- **Crear una reserva estaba denegado.** `$bookingId` usaba solo `data.child('clientId')`,
+  y en un nodo nuevo `data` es `null`, así que nadie podía crear una reserva. Ahora la
+  regla comprueba `newData` (creación) y `data` (actualización).
+- **Tres reglas de referidos no podían evaluarse.** Contenían
+  `newData.child('$uid')`: no se puede llamar `.child()` a un string, y `$` no es válido
+  dentro de una ruta. RTDB rechazaba el ruleset entero al parsearlo, así que ninguna regla
+  del fichero era aplicable. Esos campos (`referralCodeOwned`, `referralCodeCorrect`) no los
+  usa el código; el sistema de referidos real usa `referrals/{code}` y escribe
+  `referralCodeUsed`/`referredBy` desde el Admin SDK.
+- **`.validate` no se evalúa en borrados.** Para impedir que un cliente borre un
+  `paymentTxHash` ya registrado hay que bloquearlo desde el `.validate` del padre.
 
 ---
 

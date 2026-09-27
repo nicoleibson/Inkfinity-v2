@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase-config';
 import { ref, update } from 'firebase/database';
+import { DEFAULT_NETWORK, type NetworkName } from '@/lib/blockchain';
 import { Loader2 } from 'lucide-react';
 import type { Artwork } from '@/types/artwork';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -35,7 +36,7 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
     tags: [] as string[],
     isForSale: false,
     isDigitalAsset: false,
-    blockchain: 'amoy' as 'amoy' | 'polygon',
+    blockchain: DEFAULT_NETWORK,
     contractAddress: '',
     tokenId: '',
   });
@@ -50,7 +51,7 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
         tags: artwork.tags || [],
         isForSale: artwork.isForSale || false,
         isDigitalAsset: artwork.isDigitalAsset || false,
-        blockchain: artwork.blockchain || 'amoy',
+        blockchain: artwork.blockchain || DEFAULT_NETWORK,
         contractAddress: artwork.contractAddress || '',
         tokenId: artwork.tokenId || '',
       });
@@ -162,13 +163,15 @@ export function ArtworkEditDialog({ open, onOpenChange, artwork }: ArtworkEditDi
                 <div className="space-y-4 p-4 border rounded-md">
                     <div className="grid gap-2">
                         <Label htmlFor="blockchain">Blockchain</Label>
-                        <Select value={formData.blockchain} onValueChange={(v) => setFormData(prev => ({...prev, blockchain: v as any}))}>
+                        <Select value={formData.blockchain} onValueChange={(v: NetworkName) => setFormData(prev => ({...prev, blockchain: v}))}>
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="amoy">Amoy (Testnet)</SelectItem>
+                                <SelectItem value="worldchain">WorldChain (Mainnet)</SelectItem>
+                                <SelectItem value="worldchainSepolia">WorldChain Sepolia (Testnet)</SelectItem>
                                 <SelectItem value="polygon">Polygon (Mainnet)</SelectItem>
+                                <SelectItem value="amoy">Polygon Amoy (Testnet)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

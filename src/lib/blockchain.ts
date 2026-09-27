@@ -1,6 +1,19 @@
 // src/lib/blockchain.ts
 
-export type NetworkName = 'amoy' | 'polygon' | 'worldchain' | 'worldchainSepolia';
+/**
+ * Single source of truth for supported networks. Derive types, zod enums and
+ * UI pickers from this so a new network can't be added to one place and
+ * forgotten in another.
+ */
+export const NETWORK_NAMES = ['amoy', 'polygon', 'worldchain', 'worldchainSepolia'] as const;
+
+export type NetworkName = (typeof NETWORK_NAMES)[number];
+
+/**
+ * Network used when none is specified. Mirrors the fallback in
+ * `usePlatformSettings`: production settles on WorldChain (WLD).
+ */
+export const DEFAULT_NETWORK: NetworkName = 'worldchain';
 
 /**
  * Human-facing symbol for each supported network's native asset.

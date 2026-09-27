@@ -1,6 +1,6 @@
 // src/lib/nft-verification.ts
 import { JsonRpcProvider, Contract, isAddress, getAddress } from 'ethers';
-import type { NetworkName } from './blockchain';
+import { DEFAULT_NETWORK, type NetworkName } from './blockchain';
 
 /**
  * Real, on-chain NFT ownership verification.
@@ -13,6 +13,8 @@ import type { NetworkName } from './blockchain';
  * avoid public rate limits):
  *  - RPC_AMOY_URL
  *  - RPC_POLYGON_URL
+ *  - RPC_WORLDCHAIN_URL
+ *  - RPC_WORLDCHAIN_SEPOLIA_URL
  */
 const RPC_URLS: Record<NetworkName, string | undefined> = {
   amoy: process.env.RPC_AMOY_URL || 'https://rpc-amoy.polygon.technology/',
@@ -63,7 +65,7 @@ export async function verifyOwnershipOnChain({
   walletAddress,
   tokenId,
   contractAddress,
-  network = 'amoy',
+  network = DEFAULT_NETWORK,
 }: VerifyOwnershipInput): Promise<VerifyOwnershipResult> {
   if (!isAddress(walletAddress)) {
     return { isOwner: false, reason: 'The provided wallet address is not a valid address.' };

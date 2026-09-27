@@ -3,10 +3,20 @@ import { JsonRpcProvider, parseEther } from 'ethers';
 import { getDatabase } from 'firebase-admin/database';
 import { getAdminApp } from '@/lib/firebase-admin';
 import { add, getISOWeek, getISOWeekYear } from 'date-fns';
+import { requireAuth } from '@/lib/server/auth';
+import {
+  isTxHash,
+  resolveUserOpTransactionHash,
+  verifyUserOpPayment,
+} from '@/lib/server/userop-verification';
 
 export const runtime = 'nodejs';
 
-const PLATFORM_WALLET = (process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS || process.env.PLATFORM_WALLET_ADDRESS || '');
+const PLATFORM_WALLET = (
+  process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS ||
+  process.env.PLATFORM_WALLET_ADDRESS ||
+  ''
+).trim();
 
 const RPC_FALLBACK: Record<string, string> = {
   amoy: 'https://rpc-amoy.polygon.technology',
@@ -14,6 +24,19 @@ const RPC_FALLBACK: Record<string, string> = {
   worldchain: 'https://worldchain-mainnet.g.alchemy.com/public',
   worldchainSepolia: 'https://worldchain-sepolia.g.alchemy.com/public',
 };
+
+/**
+ * Optional bundler RPC. Public World Chain RPCs reject `eth_getUserOperationByHash`
+ * (`401: Only core evm requests are allowed.`), so exact userOp verification needs a
+ * dedicated bundler. Without it the route falls back to a treasury balance-delta
+ * check, which is weaker but still fail-closed.
+ */
+function resolveBundlerUrl(network: string): string | undefined {
+  if (network !== 'worldchain' && network !== 'worldchainSepolia') return undefined;
+  const key = network === 'worldchain' ? 'RPC_WORLDCHAIN_BUNDLER_URL' : 'RPC_WORLDCHAIN_SEPOLIA_BUNDLER_URL';
+  const value = (process.env[key] || '').trim();
+  return value || undefined;
+}
 
 function resolveRpc(network: string): string {
   const envKey =
@@ -27,88 +50,68 @@ function resolveRpc(network: string): string {
   return (process.env[envKey] || '').trim() || RPC_FALLBACK[network] || '';
 }
 
+function errorResponse(status: number, error: string, code: string) {
+  return NextResponse.json({ success: false, error, code }, { status });
+}
+
 export function POST(request: NextRequest) {
   return (async () => {
-    let body: any = {};
+    // This route uses the Admin SDK, which bypasses database.rules.json. The caller
+    // must prove who they are, and the user id is taken from the verified token only
+    // (a body-supplied userId would let anyone claim another user's payment).
+    const auth = await requireAuth(request);
+    if (!auth.ok) {
+      return errorResponse(auth.status, auth.error, 'UNAUTHENTICATED');
+    }
+    const userId = auth.user.uid;
+
+    let body: Record<string, unknown> = {};
     try {
-      body = await request.json();
+      body = (await request.json()) as Record<string, unknown>;
     } catch {
-      return NextResponse.json({ success: false, error: 'Invalid JSON body.' }, { status: 400 });
+      return errorResponse(400, 'Invalid JSON body.', 'INVALID_BODY');
     }
 
     const txHash = (body?.txHash || '').toString().trim();
     const userOpHash = (body?.userOpHash || '').toString().trim();
-    const userId = (body?.userId || '').toString().trim();
-    const network = (body?.network || 'worldchainSepolia').toString().trim();
+    const network = (body?.network || 'worldchain').toString().trim();
+    const claimsFreePassage = body?.freePassage === true;
 
-    if (!/^0x[0-9a-fA-F]{64}$/.test(txHash) && !/^0x[0-9a-fA-F]{64}$/.test(userOpHash)) {
-      return NextResponse.json({ success: false, error: 'A valid txHash or userOpHash is required.' }, { status: 400 });
+    if (txHash && userOpHash) {
+      return errorResponse(400, 'Provide either txHash or userOpHash, not both.', 'AMBIGUOUS_PAYMENT_HASH');
     }
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'userId is required.' }, { status: 400 });
+    if (!isTxHash(txHash) && !isTxHash(userOpHash) && !claimsFreePassage) {
+      return errorResponse(400, 'A valid txHash or userOpHash is required.', 'MISSING_PAYMENT_HASH');
     }
-    if (network !== 'amoy' && network !== 'polygon' && network !== 'worldchain' && network !== 'worldchainSepolia') {
-      return NextResponse.json({ success: false, error: 'network must be "amoy", "polygon", "worldchain" or "worldchainSepolia".' }, { status: 400 });
+    if (!['amoy', 'polygon', 'worldchain', 'worldchainSepolia'].includes(network)) {
+      return errorResponse(
+        400,
+        'network must be "amoy", "polygon", "worldchain" or "worldchainSepolia".',
+        'INVALID_NETWORK',
+      );
+    }
+    if (!PLATFORM_WALLET) {
+      return errorResponse(500, 'The platform wallet is not configured.', 'WALLET_NOT_CONFIGURED');
     }
 
     const rpcUrl = resolveRpc(network);
     if (!rpcUrl) {
-      return NextResponse.json({ success: false, error: `No RPC URL configured for "${network}".` }, { status: 500 });
-    }
-
-    const provider = new JsonRpcProvider(rpcUrl);
-
-    // World App settles via ERC-4337 userOps: resolve the final on-chain tx hash
-    // via the Developer Portal before running the normal on-chain checks.
-    let effectiveTxHash = txHash;
-    if (userOpHash) {
-      const userOpRes = await fetch(`https://developer.world.org/api/v2/minikit/userop/${userOpHash}`);
-      if (!userOpRes.ok) {
-        return NextResponse.json({ success: false, error: 'Failed to verify the World App user operation.', code: 'USEROP_LOOKUP_FAILED' }, { status: 502 });
-      }
-      const userOp = await userOpRes.json();
-      if (userOp?.status === 'failed') {
-        return NextResponse.json({ success: false, error: 'The World App transaction failed on-chain. Payment NOT credited.', code: 'USEROP_FAILED' }, { status: 422 });
-      }
-      if (userOp?.status === 'pending' || !userOp?.transaction_hash) {
-        return NextResponse.json({ success: false, error: 'Transaction is pending (not yet confirmed).', code: 'TX_PENDING' }, { status: 202 });
-      }
-      effectiveTxHash = userOp.transaction_hash;
-    }
-
-    const tx = await provider.getTransaction(effectiveTxHash);
-    if (!tx) {
-      return NextResponse.json({ success: false, error: 'Transaction not found on-chain.', code: 'TX_NOT_FOUND' }, { status: 422 });
-    }
-
-    const receipt = await provider.getTransactionReceipt(effectiveTxHash);
-    if (!receipt) {
-      return NextResponse.json({ success: false, error: 'Transaction is pending (not yet confirmed).', code: 'TX_PENDING' }, { status: 202 });
-    }
-    if (receipt.status !== 1) {
-      return NextResponse.json({ success: false, error: 'Transaction reverted on-chain (status !== 1). Payment NOT credited.', code: 'TX_REVERTED' }, { status: 422 });
-    }
-
-    const toChecksum =
-      process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS ||
-      process.env.PLATFORM_WALLET_ADDRESS ||
-      '';
-    if (!tx.to || tx.to.toLowerCase() !== toChecksum.toLowerCase()) {
-      return NextResponse.json({ success: false, error: 'Transaction recipient is not the platform wallet.', code: 'WRONG_RECIPIENT' }, { status: 422 });
+      return errorResponse(500, `No RPC URL configured for "${network}".`, 'RPC_NOT_CONFIGURED');
     }
 
     const db = getDatabase(getAdminApp());
 
-    const settingsSnap = await db.ref('platform_settings').get();
-    const settings = settingsSnap.exists() ? settingsSnap.val() : {};
-
+    // --- Identity + expected fee first: everything below compares against this. ---
     const userSnap = await db.ref(`users/${userId}`).get();
     if (!userSnap.exists()) {
-      return NextResponse.json({ success: false, error: 'User profile not found.' }, { status: 404 });
+      return errorResponse(404, 'User profile not found.', 'USER_NOT_FOUND');
     }
     const user = userSnap.val();
 
-    let baseFee =
+    const settingsSnap = await db.ref('platform_settings').get();
+    const settings = settingsSnap.exists() ? settingsSnap.val() : {};
+
+    const baseFee =
       user.role === 'Tattoo Artist'
         ? settings.artistMembershipTiers?.tier1 || 0
         : user.role === 'Studio'
@@ -117,7 +120,6 @@ export function POST(request: NextRequest) {
             ? settings.supplyStoreRegistrationFee || 0
             : 0;
 
-    let expectedFee = baseFee;
     let referralMultiplier = 1;
     if (user.referralCodeUsed && user.referredBy) {
       const referralSnap = await db.ref(`referrals/${user.referralCodeUsed}`).get();
@@ -127,20 +129,199 @@ export function POST(request: NextRequest) {
       }
     }
 
-    const expectedFeeEth = expectedFee * referralMultiplier; // baseFee * (1 - discountPct/100);
-    const minValueWei = parseEther(expectedFeeEth.toFixed(18));
-    if (tx.value < minValueWei) {
-      return NextResponse.json({ success: false, error: 'Transaction value is below the required membership fee.', code: 'INSUFFICIENT_VALUE' }, { status: 422 });
+    const expectedFee = baseFee * referralMultiplier;
+    const minValueWei = parseEther(expectedFee.toFixed(18));
+
+    // A fully discounted (or unconfigured) fee cannot be proven on-chain. The client may
+    // explicitly ask for the free path; the server independently confirms the fee is
+    // really zero before granting anything.
+    const freePassage = minValueWei <= BigInt(0);
+    if (freePassage && !claimsFreePassage) {
+      return errorResponse(
+        422,
+        'No membership fee is due for this account, so no payment is required.',
+        'NO_FEE_DUE',
+      );
+    }
+    if (!freePassage && claimsFreePassage) {
+      return errorResponse(400, 'A payment is required for this account.', 'PAYMENT_REQUIRED');
     }
 
+    // --- Free path (no payment to verify) ------------------------------------
+    // Bounded by the account state rather than by a payment reference: the trial is only
+    // (re)started when it is missing or expired, so repeatedly calling this endpoint can
+    // never stack extra years onto an already-valid membership.
+    if (freePassage) {
+      const currentTrialEndsAt = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+      const trialStillValid =
+        user.status === 'active' && currentTrialEndsAt !== null && currentTrialEndsAt.getTime() > Date.now();
+
+      if (trialStillValid) {
+        return NextResponse.json({
+          success: true,
+          txHash: null,
+          userOpHash: null,
+          freePassage: true,
+          alreadyActive: true,
+        });
+      }
+
+      const updates: Record<string, string> = {
+        status: 'active',
+        paymentDate: new Date().toISOString(),
+      };
+      if (user.role === 'Tattoo Artist') {
+        updates.trialEndsAt = add(new Date(), { years: 1 }).toISOString();
+      }
+      await db.ref(`users/${userId}`).update(updates);
+
+      return NextResponse.json({ success: true, txHash: null, userOpHash: null, freePassage: true });
+    }
+
+    // --- Replay protection ---------------------------------------------------
+    // The same payment reference must never be redeemed twice: previously the
+    // endpoint had no such check, so replaying one txHash granted an extra year of
+    // membership (and another referral commission) on every call.
+    const claimKey = `${network}:${userOpHash || txHash}`.toLowerCase();
+    const claimRef = db.ref(`payment_claims/${claimKey.replace(/[^a-z0-9:-]/g, '')}`);
+    const claimSnap = await claimRef.get();
+
+    if (claimSnap.exists()) {
+      const claim = claimSnap.val();
+      if (claim?.userId === userId && claim?.kind === 'membership') {
+        // Idempotent retry of a payment already credited to this same user.
+        return NextResponse.json({
+          success: true,
+          txHash: claim?.paymentRef || txHash,
+          userOpHash: userOpHash || null,
+          alreadyCredited: true,
+        });
+      }
+      return errorResponse(
+        409,
+        'This payment has already been used.',
+        'PAYMENT_ALREADY_USED',
+      );
+    }
+
+    // --- On-chain verification ----------------------------------------------
+    const provider = new JsonRpcProvider(rpcUrl);
+    let paymentRef: string;
+    let verificationNote: string;
+
+    if (userOpHash) {
+      // World App settles via ERC-4337. Resolve the settling transaction, then verify
+      // the userOp itself (EntryPoint event + exact to/value when a bundler is set up).
+      const resolved = await resolveUserOpTransactionHash(userOpHash, {
+        timeoutMs: 45_000,
+        intervalMs: 3_000,
+      });
+
+      if (resolved.state === 'pending') {
+        return errorResponse(
+          202,
+          'The transaction is still pending confirmation. Try again in a few seconds.',
+          'TX_PENDING',
+        );
+      }
+      if (resolved.state === 'failed') {
+        return errorResponse(422, resolved.detail, 'USEROP_FAILED');
+      }
+      if (resolved.state === 'unavailable') {
+        return errorResponse(
+          502,
+          'Could not reach the World Developer Portal to confirm the transaction. Nothing was charged to your account.',
+          'USEROP_LOOKUP_FAILED',
+        );
+      }
+
+      const userOpResult = await verifyUserOpPayment({
+        provider,
+        userOpHash,
+        transactionHash: resolved.transactionHash,
+        expectedTo: PLATFORM_WALLET,
+        minValueWei,
+        bundlerUrl: resolveBundlerUrl(network),
+        treasuryAddress: PLATFORM_WALLET,
+      });
+
+      if (!userOpResult.ok) {
+        return errorResponse(userOpResult.status, userOpResult.error, userOpResult.code);
+      }
+
+      paymentRef = userOpHash;
+      verificationNote = userOpResult.resolution.exactRecipientVerified
+        ? 'userop-verified-exact'
+        : 'userop-verified-balance-delta';
+    } else {
+      const tx = await provider.getTransaction(txHash);
+      if (!tx) {
+        return errorResponse(422, 'Transaction not found on-chain.', 'TX_NOT_FOUND');
+      }
+      if (!tx.to || tx.to.toLowerCase() !== PLATFORM_WALLET.toLowerCase()) {
+        return errorResponse(422, 'Transaction recipient is not the platform wallet.', 'WRONG_RECIPIENT');
+      }
+      if (tx.value < minValueWei) {
+        return errorResponse(
+          422,
+          'Transaction value is below the required membership fee.',
+          'INSUFFICIENT_VALUE',
+        );
+      }
+
+      const receipt = await provider.getTransactionReceipt(txHash);
+      if (!receipt) {
+        return errorResponse(
+          202,
+          'The transaction is still pending confirmation. Try again in a few seconds.',
+          'TX_PENDING',
+        );
+      }
+      if (receipt.status !== 1) {
+        return errorResponse(
+          422,
+          'Transaction reverted on-chain (status !== 1). Payment NOT credited.',
+          'TX_REVERTED',
+        );
+      }
+
+      // Require a minimum confirmation depth so a reorg cannot credit a payment that
+      // later disappears from the chain.
+      const REQUIRED_CONFIRMATIONS = 5;
+      const head = await provider.getBlockNumber();
+      if (head - receipt.blockNumber + 1 < REQUIRED_CONFIRMATIONS) {
+        return errorResponse(
+          202,
+          `The transaction has only ${head - receipt.blockNumber + 1} confirmation(s). Try again shortly.`,
+          'TX_PENDING',
+        );
+      }
+
+      paymentRef = txHash;
+      verificationNote = 'tx-verified';
+    }
+
+    // --- Credit the payment --------------------------------------------------
     const updates: Record<string, string> = {
       status: 'active',
       paymentDate: new Date().toISOString(),
-      paymentTxHash: effectiveTxHash,
+      paymentTxHash: paymentRef,
     };
     if (user.role === 'Tattoo Artist') {
       updates.trialEndsAt = add(new Date(), { years: 1 }).toISOString();
     }
+
+    // Claim first: if this write fails, nothing is credited, so a crash between the
+    // two cannot double-credit.
+    await claimRef.set({
+      userId,
+      kind: 'membership',
+      network,
+      paymentRef,
+      userOpHash: userOpHash || null,
+      verification: verificationNote,
+      claimedAt: new Date().toISOString(),
+    });
     await db.ref(`users/${userId}`).update(updates);
 
     // ---- Semanal: acumular comisión al referidor (recién pagó el referido) ----
@@ -160,23 +341,34 @@ export function POST(request: NextRequest) {
           earningsRef.child('totalWei').get(),
           earningsRef.child('activatedReferrals').get(),
         ]);
-        const prevWei = prevTotal.exists() ? BigInt(prevTotal.val() || '0') : BigInt("0");
+        const prevWei = prevTotal.exists() ? BigInt(prevTotal.val() || '0') : BigInt('0');
         const prevAct = prevCount.exists() ? parseInt(prevCount.val() || '0', 10) : 0;
-        const commissionWei = (BigInt(minValueWei) * BigInt(Math.round(commissionPct * 100))) / BigInt("10000");
-        const bonusWeiPerActivation = BigInt("0"); // (por confirmar con payout), para no inventar constantes.
+        const commissionWei =
+          (BigInt(minValueWei) * BigInt(Math.round(commissionPct * 100))) / BigInt('10000');
 
-        const referenceUpdates: { [key: string]: any } = {};
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/totalWei`] = (prevWei + commissionWei).toString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/activatedReferrals`] = prevAct + 1;
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/lastActivationAt`] = new Date().toISOString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekStart`] = new Date().toISOString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekEnd`] = new Date().toISOString();
+        const referenceUpdates: Record<string, unknown> = {};
+        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/totalWei`] = (
+          prevWei + commissionWei
+        ).toString();
+        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/activatedReferrals`] =
+          prevAct + 1;
+        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/lastActivationAt`] =
+          new Date().toISOString();
+        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekStart`] =
+          new Date().toISOString();
+        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekEnd`] =
+          new Date().toISOString();
         referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/status`] = 'open';
         await db.ref().update(referenceUpdates);
       }
     }
 
-    return NextResponse.json({ success: true, txHash: effectiveTxHash });
+    return NextResponse.json({
+      success: true,
+      txHash: userOpHash ? null : paymentRef,
+      userOpHash: userOpHash || null,
+      verification: verificationNote,
+    });
   })().catch((error: unknown) => {
     console.error('verify-payment error:', error);
     const message = error instanceof Error ? error.message : 'Payment verification failed.';

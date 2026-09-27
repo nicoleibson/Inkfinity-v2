@@ -114,6 +114,16 @@ RPC_WORLDCHAIN_URL=https://worldchain-mainnet.g.alchemy.com/public
 RPC_WORLDCHAIN_SEPOLIA_URL=https://worldchain-sepolia.g.alchemy.com/public
 RPC_AMOY_URL=https://rpc-amoy.polygon.technology
 RPC_POLYGON_URL=https://polygon-rpc.com
+# Bundler para verificar el recipient/importe exactos de una userOp (ERC-4337).
+# Los RPC públicos de WorldChain rechazan eth_getUserOperationByHash
+# (401: Only core evm requests are allowed.) y no hay bundler público para World Chain.
+# Sin esta variable los pagos de la World App se validan con un delta de saldo.
+RPC_WORLDCHAIN_BUNDLER_URL=
+RPC_WORLDCHAIN_SEPOLIA_BUNDLER_URL=
+# Precio de referencia para depósitos de reserva (denominados en USD). Default: CoinGecko.
+PRICE_API_BASE_URL=https://api.coingecko.com/api/v3/simple/price
+# Solo local: habilita el precio fijo heredado (3500 USD). NUNCA en producción.
+ALLOW_MOCK_PRICES=
 # Dirección de la wallet de la plataforma (server-side). Si se omite, se usa
 # NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS como "tx.to" esperada.
 PLATFORM_WALLET_ADDRESS=

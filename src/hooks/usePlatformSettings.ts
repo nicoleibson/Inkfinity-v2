@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '@/lib/firebase-config';
+import { DEFAULT_NETWORK, type NetworkName } from '@/lib/blockchain';
 
 export type ColorScheme = {
     background: string;
@@ -17,7 +18,7 @@ export type ColorScheme = {
 }
 
 export type PlatformSettings = {
-  network: 'polygon' | 'amoy' | 'worldchain' | 'worldchainSepolia';
+  network: NetworkName;
   lastNftSync?: string;
   studioRegistrationFee?: number;
   supplyStoreRegistrationFee?: number;
@@ -45,7 +46,7 @@ export function usePlatformSettings() {
         if (snapshot.exists()) {
           setSettings(snapshot.val());
         } else {
-          setSettings({ network: 'worldchain' }); // default settings (WorldChain mainnet — WLD)
+          setSettings({ network: DEFAULT_NETWORK }); // default settings (WorldChain mainnet — WLD)
         }
         setLoading(false);
       }, 

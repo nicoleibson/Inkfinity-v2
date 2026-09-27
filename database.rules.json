@@ -49,7 +49,7 @@
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
         },
         "referralCode": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
+          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != ''"
         },
         "referralCodeUsedBy": {
           ".write": "root.child('referralCodeUsed').child(newData.val()).exists() === true"
@@ -61,10 +61,10 @@
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
         },
         "referralCodeOwned": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
+          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != ''"
         },
         "referralCodeCorrect": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != '' && newData.child('$uid').exists() === false"
+          ".write": "auth != null && auth.uid === $uid && newData.exists() && newData.val() != ''"
         },
         "referralPayoutsDate": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))"
@@ -117,8 +117,26 @@
       ],
       "$bookingId": {
         ".read": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
-        ".write": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
-        ".validate": "newData.hasChildren(['clientId', 'artistId', 'bookingDate', 'status', 'createdAt'])"
+        ".write": "auth != null && (data.child('clientId').val() === auth.uid || data.child('artistId').val() === auth.uid || newData.child('clientId').val() === auth.uid || newData.child('artistId').val() === auth.uid || (root.child('users').child(auth.uid).child('role').exists() && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')))",
+        ".validate": "newData.hasChildren(['clientId', 'artistId', 'bookingDate', 'status', 'createdAt']) && (!data.child('paymentTxHash').exists() || newData.child('paymentTxHash').exists() || (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')) && (!data.child('cancellationTxHash').exists() || newData.child('cancellationTxHash').exists() || (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')) && (!data.child('depositConfirmedAt').exists() || newData.child('depositConfirmedAt').exists() || (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')) && (!data.child('refundConfirmedAt').exists() || newData.child('refundConfirmedAt').exists() || (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'))",
+        "paymentTxHash": {
+          ".validate": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')"
+        },
+        "cancellationTxHash": {
+          ".validate": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')"
+        },
+        "depositConfirmedAt": {
+          ".validate": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')"
+        },
+        "refundConfirmedAt": {
+          ".validate": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator')"
+        },
+        "depositAmount": {
+          ".validate": "!data.exists() || newData.val() >= data.val() || root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'"
+        },
+        "status": {
+          ".validate": "newData.val() !== 'confirmed' || data.val() === 'confirmed' || !root.child('bookings').child($bookingId).child('depositAmount').exists() || root.child('bookings').child($bookingId).child('depositAmount').val() <= 0 || root.child('users').child(auth.uid).child('role').val() === 'Administrator' || root.child('users').child(auth.uid).child('role').val() === 'Super-Administrator'"
+        }
       }
     },
     "reviews": {

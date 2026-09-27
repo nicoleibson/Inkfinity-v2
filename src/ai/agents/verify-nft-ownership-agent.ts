@@ -9,6 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { VerifyNftOwnershipInputSchema, VerifyNftOwnershipOutputSchema } from '@/ai/schemas/verify-nft-ownership-schema';
 import { verifyOwnershipOnChain } from '@/lib/nft-verification';
+import { DEFAULT_NETWORK } from '@/lib/blockchain';
 
 /**
  * A tool that queries the blockchain in real time to verify NFT ownership.
@@ -23,13 +24,13 @@ const isNftOwner = ai.defineTool(
   },
   async (input) => {
     console.log(
-      `Checking on-chain ownership for token ${input.tokenId} (${input.contractAddress}) on ${input.network || 'amoy'} for wallet ${input.walletAddress}...`
+      `Checking on-chain ownership for token ${input.tokenId} (${input.contractAddress}) on ${input.network || DEFAULT_NETWORK} for wallet ${input.walletAddress}...`
     );
     const result = await verifyOwnershipOnChain(input);
     return {
       isOwner: result.isOwner,
       reason: result.reason,
-      network: input.network || 'amoy',
+      network: input.network || DEFAULT_NETWORK,
       standard: result.standard,
       onChainOwner: result.onChainOwner,
     };

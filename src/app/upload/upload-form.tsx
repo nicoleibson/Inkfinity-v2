@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { moderateImage } from '@/ai/flows/image-moderation';
 import { generateArtworkDetails } from '@/ai/flows/artwork-details-generation';
 import { verifyNftOwnership } from '@/ai/flows/verify-nft-ownership-flow';
+import { DEFAULT_NETWORK, type NetworkName } from '@/lib/blockchain';
+import { usePlatformSettings } from '@/hooks/usePlatformSettings';
 import { Loader2, Sparkles, UploadCloud, ShieldAlert, ShieldCheck, FileUp, Droplets, Gem, HardDrive, Crop, ArrowRight, Info, X, MapPin, Wallet, FolderSync, CheckCircle2, Cloud, Database } from 'lucide-react';
 import { getDatabase, ref as databaseRef, set, push, update, increment, get } from 'firebase/database';
 import { auth, database } from '@/lib/firebase-config';
@@ -111,7 +113,12 @@ export default function UploadForm() {
   
   // Marketplace unification
   const [isForSale, setIsForSale] = useState(false);
-  const [blockchain, setBlockchain] = useState<'amoy' | 'polygon'>('amoy');
+  const [blockchain, setBlockchain] = useState<NetworkName>(DEFAULT_NETWORK);
+  const { settings: platformSettings } = usePlatformSettings();
+  // La red por defecto es la configurada para la plataforma, no un testnet.
+  useEffect(() => {
+    if (platformSettings?.network) setBlockchain(platformSettings.network);
+  }, [platformSettings?.network]);
   const [contractAddress, setContractAddress] = useState('');
   const [tokenId, setTokenId] = useState('');
   const [isNftVerified, setIsNftVerified] = useState(false);
@@ -602,12 +609,14 @@ export default function UploadForm() {
                             <div className="space-y-4 pt-2 border-t">
                                 <div className="grid gap-2">
                                     <Label>Blockchain Network</Label>
-                                    <Select value={blockchain} onValueChange={(v: any) => setBlockchain(v)}>
+                                    <Select value={blockchain} onValueChange={(v: NetworkName) => setBlockchain(v)}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="amoy">Polygon Amoy (Testnet)</SelectItem>
-                                            <SelectItem value="polygon">Polygon Mainnet</SelectItem>
-                                        </SelectContent>
+                                            <SelectContent>
+                                                <SelectItem value="worldchain">WorldChain (Mainnet)</SelectItem>
+                                                <SelectItem value="worldchainSepolia">WorldChain Sepolia (Testnet)</SelectItem>
+                                                <SelectItem value="polygon">Polygon (Mainnet)</SelectItem>
+                                                <SelectItem value="amoy">Polygon Amoy (Testnet)</SelectItem>
+                                            </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="grid gap-2">

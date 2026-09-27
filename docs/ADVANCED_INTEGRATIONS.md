@@ -17,7 +17,7 @@ All server-side AI logic is implemented with [Genkit](https://firebase.google.co
 | `moderateImage` | `image-moderation-agent.ts` | Scans images for inappropriate content and blocks flagged uploads. |
 | `generateOnboardingContent` | `onboarding-assistant-agent.ts` | Creates a professional bio and avatar for new users. |
 | `watermarkImage` | `watermark-image-agent.ts` | Applies the "Inkfinity" watermark server-side. |
-| `verifyNftOwnership` | `verify-nft-ownership-agent.ts` | Checks on-chain NFT ownership (simulated). |
+| `verifyNftOwnership` | `verify-nft-ownership-agent.ts` | Real on-chain ownership read (ERC-721 `ownerOf` / ERC-1155 `balanceOf`) via `src/lib/nft-verification.ts`. Supports every network in `NETWORK_NAMES`; defaults to the platform network, so it never silently verifies against a testnet. |
 | `geocodeAddress` | `geocode-address-agent.ts` | Resolves addresses to coordinates via Google Maps. |
 
 Each flow has a **Zod schema** in `src/ai/schemas/` (strict input/output validation) and a thin wrapper in `src/ai/flows/`. Genkit is configured in `src/ai/genkit.ts` (Google GenAI provider; API key resolution: `GEMINI_API_KEY` → `GOOGLE_GENAI_API_KEY` → `GOOGLE_API_KEY` → `NEXT_PUBLIC_*`).
@@ -46,7 +46,7 @@ Inkfinity settles payments on **WorldChain** using the **native token WLD** (cha
 | Test network | `worldchainSepolia` (chainId 4801, WLD) |
 | Legacy | `polygon` (MATIC), `amoy` (test) |
 | Config source | `platform_settings.network` in Realtime Database (overrides the code default) |
-| Default in code | `worldchain` (`src/hooks/usePlatformSettings.ts`) |
+| Single source of truth | `NETWORK_NAMES` / `DEFAULT_NETWORK` in `src/lib/blockchain.ts` |
 
 Two wallet paths coexist behind a single UI:
 
@@ -63,16 +63,71 @@ This endpoint is public (no API key required). Public RPC endpoints generally **
 
 `src/app/api/verify-payment/route.ts` accepts either a `txHash` (web / EOA) or a `userOpHash` (World App) and answers:
 
-- `202 Accepted` — userOp still pending,
-- `422 Unprocessable Entity` — userOp reverted,
-- `200 OK` — resolved; the resulting `transaction_hash` is then verified on-chain before the membership is granted.
+- `202 Accepted` — still pending confirmation,
+- `422 Unprocessable Entity` — the transfer could not be proven,
+- `409 Conflict` — the payment reference was already redeemed,
+- `200 OK` — credited.
 
-> ⚠️ **Known limitation — do not enable with real funds yet.** The userOp path is not fully hardened:
-> - The endpoint performs a **single** lookup; a userOp that is still `pending` at that instant returns `202` and the client does not retry, so users can be charged without their membership being activated.
-> - Once resolved, the code re-checks the **top-level transaction** (`tx.to === PLATFORM_WALLET`, `tx.value >= fee`). For ERC-4337 the top-level transaction targets the **EntryPoint** with `value = 0`, so these checks do not describe what the user actually signed. Sender, recipient and amount must be validated from the userOp/bundler response instead.
-> - `src/components/bookings/booking-list.tsx` writes the `userOpHash` as `paymentTxHash` and marks booking deposits/refunds as **confirmed immediately**, without server-side verification. This must be replaced by a confirmed-on-chain check before it can be considered safe.
->
-> Recommended fix: verify the userOp against the Developer Portal / bundler response (sender, `to`, value), poll until terminal, and only then activate the membership or flip the booking status. See `docs/TROUBLESHOOTING.md` for userOp-specific errors.
+##### How a user operation is actually verified
+
+`src/lib/server/userop-verification.ts` resolves the userOp and then verifies it against
+**three independent on-chain facts**, because the settling transaction points at the
+ERC-4337 **EntryPoint** with `value = 0` and therefore says nothing about what the user paid:
+
+1. **`UserOperationEvent`** (`src/lib/userop-encoding.ts`) — the event the EntryPoint emits
+   inside the settling transaction. Matching `topic1` against the claimed `userOpHash` binds
+   the claim to a real, **successful** operation and yields the `sender`. The EntryPoint
+   address is read from the emitting log, so EntryPoint 0.6 and 0.7 both work without
+   hardcoding an address.
+2. **Exact recipient and amount** — when `RPC_WORLDCHAIN_BUNDLER_URL` is configured, the
+   userOp is fetched with `eth_getUserOperationByHash` and its fields are validated against
+   the claimed hash by **recomputing the ERC-4337 `userOpHash` locally**. A bundler that
+   lies about `to`/`value` is detected.
+3. **Treasury balance delta** — with no bundler configured, the recipient's balance is
+   compared across the settling block and must have grown by at least the required fee.
+
+Every path fails closed: if the payment cannot be proven, nothing is credited.
+
+> Public World Chain RPCs reject `eth_getUserOperationByHash`
+> (`401: Only core evm requests are allowed.`) and no public World Chain bundler serves it,
+> so **path 3 is the default**. It is conservative but sound: the funds must have actually
+> arrived. Set `RPC_WORLDCHAIN_BUNDLER_URL` to get exact `to`/`value` proof.
+
+##### Other hardening in the same pipeline
+
+- **Authentication.** Both verification endpoints use the Admin SDK, which bypasses
+  `database.rules.json`, so they require an `Authorization: Bearer <Firebase ID token>`
+  header (`src/lib/server/auth.ts`) and take the acting user **from the verified token**,
+  never from the request body. Previously `/api/verify-payment` accepted any `userId`,
+  which let a third party redeem someone else's payment.
+- **Replay protection.** Every redeemed payment writes a `payment_claims/<network>:<hash>`
+  record. Reusing a reference is rejected with `409`; an identical retry from the same user
+  is idempotent. Without this, replaying one `txHash` granted an extra year of membership
+  and another referral commission on every call.
+- **Confirmation depth.** Regular transfers require 5 confirmations before being credited.
+- **Zero-fee path.** A fully discounted fee has no transaction to verify, so the client
+  sends `freePassage: true` and the **server** independently confirms the fee is really zero.
+  The trial is only (re)started when missing or expired, so it cannot be stacked.
+- **Booking deposits and refunds** go through `src/app/api/verify-booking-payment/route.ts`,
+  which proves the transfer (recipient, amount, payer, depth) and only then flips the
+  booking status. The client no longer writes the status itself.
+- **Database rules** restrict `paymentTxHash`, `cancellationTxHash`, `depositConfirmedAt`,
+  `refundConfirmedAt` to admins, forbid lowering `depositAmount`, and block a
+  non-admin from setting `status: 'confirmed'` on a booking that has a deposit. Server
+  writes (Admin SDK) bypass these rules, which is what makes the server the only path that
+  can settle a payment.
+- **Shared pricing** (`src/lib/pricing.ts`) is used by both the client (to quote a deposit)
+  and the server (to bound a valid transfer) so the amounts agree. It replaces the Genkit
+  `get-crypto-price` flow, which returned a hardcoded `3500` USD and priced WLD payments
+  with the ETH price. The server fails closed with `PRICE_UNAVAILABLE` if no price can be
+  obtained, because an amount bound that cannot be computed is not a bound.
+
+> ⚠️ **Operational notes**
+> - `PRICE_API_BASE_URL` (default: CoinGecko simple price) and `RPC_WORLDCHAIN_BUNDLER_URL`
+>   must be set in Vercel for booking settlements on WorldChain.
+> - `ALLOW_MOCK_PRICES=true` enables the legacy hardcoded price for local development only.
+> - Membership fees are stored in crypto units in `platform_settings`, so they need no price
+>   lookup; only USD-denominated booking deposits do.
 
 The web/EVM path additionally fixes a real-world signer bug: browsers may expose several accounts while `ethers` holds a different one, so every `getSigner()` call passes the address explicitly (`getSigner(walletAddress ?? undefined)`) to avoid `no such account`.
 

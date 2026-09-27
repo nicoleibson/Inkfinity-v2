@@ -17,7 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/context/wallet-provider';
 import { parseEther, parseUnits } from 'ethers';
 import { ReviewDialog } from '@/components/reviews/review-dialog';
-import { getCryptoPrice } from '@/ai/flows/get-crypto-price-flow';
+import { getTokenPriceUsd, tokenSymbolForNetwork } from '@/lib/pricing';
+import { verifyWithPolling } from '@/lib/payment-verification-client';
 import { usePlatformSettings } from '@/hooks/usePlatformSettings';
 import { isInWorldApp, sendWorldAppTransaction } from '@/lib/world-app';
 import { NETWORK_TOKEN_SYMBOL } from '@/lib/blockchain';
@@ -47,13 +48,20 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [tokenPrice, setTokenPrice] = useState<number | null>(null);
 
+  // The deposit is quoted in USD and paid in the chain's native token, so the price
+  // must match the network: WLD on WorldChain, ETH on Polygon/Amoy. The server applies
+  // the same price (src/lib/pricing.ts) to bound a valid transfer, so both sides agree.
   useEffect(() => {
-    getCryptoPrice({ cryptoSymbol: 'ETH' }).then(result => {
-        setEthPrice(result.priceUsd);
+    let cancelled = false;
+    getTokenPriceUsd(tokenSymbolForNetwork(bookingNetwork)).then(price => {
+      if (!cancelled) setTokenPrice(price);
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingNetwork]);
 
   const handleUpdateStatus = async (bookingId: string, newStatus: BookingStatus, updates?: Partial<Booking>) => {
     setUpdatingBookingId(bookingId);
@@ -118,7 +126,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         connectWallet();
         return;
     }
-    if (!booking.artistWalletAddress || !booking.depositAmount || !ethPrice) {
+    if (!booking.artistWalletAddress || !booking.depositAmount || !tokenPrice) {
         toast({ variant: 'destructive', title: 'Payment Error', description: 'Artist wallet, deposit amount, or ETH price is not set.' });
         return;
     }
@@ -126,38 +134,54 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
     setPayingBookingId(booking.id);
     
     try {
-        const depositInEth = booking.depositAmount / ethPrice;
+        const depositInToken = booking.depositAmount / tokenPrice;
+        let txHash: string | null = null;
+        let userOpHash: string | null = null;
 
         if (isInWorldApp()) {
             const userOp = await sendWorldAppTransaction({
                 to: booking.artistWalletAddress as string,
-                valueWei: parseEther(depositInEth.toFixed(18)),
+                valueWei: parseEther(depositInToken.toFixed(18)),
             });
-            toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
-            await handleUpdateStatus(booking.id, 'confirmed', { paymentTxHash: userOp.userOpHash });
-            toast({ title: 'Payment Confirmed!', description: 'Your booking is confirmed. Transaction: ' + userOp.userOpHash.slice(0, 10) + '...' });
-            return;
-        }
+            userOpHash = userOp.userOpHash;
+        } else {
+            const signer = await provider.getSigner(walletAddress ?? undefined);
 
-        const signer = await provider.getSigner(walletAddress ?? undefined);
-
-        const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
-            to: booking.artistWalletAddress,
-            value: parseEther(depositInEth.toFixed(18))
-        };
-        if (settings?.network === 'amoy') {
-            const fee = parseUnits('30', 'gwei');
-            txParams.maxPriorityFeePerGas = fee;
-            txParams.maxFeePerGas = fee;
+            const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
+                to: booking.artistWalletAddress,
+                value: parseEther(depositInToken.toFixed(18))
+            };
+            if (settings?.network === 'amoy') {
+                const fee = parseUnits('30', 'gwei');
+                txParams.maxPriorityFeePerGas = fee;
+                txParams.maxFeePerGas = fee;
+            }
+            const tx = await signer.sendTransaction(txParams);
+            txHash = tx.hash;
         }
-        const tx = await signer.sendTransaction(txParams);
 
         toast({ title: 'Transaction Sent', description: 'Waiting for blockchain confirmation...' });
-        await tx.wait();
 
-        await handleUpdateStatus(booking.id, 'confirmed', { paymentTxHash: tx.hash });
-        
-        toast({ title: 'Payment Confirmed!', description: 'Your booking is confirmed. Transaction hash: ' + tx.hash.slice(0, 10) + '...' });
+        // The booking is only marked as paid once the server has proven the transfer
+        // on-chain. The client no longer flips the status itself: doing so credited
+        // deposits that were never paid (and World App user operations are not even
+        // mined when the wallet returns the hash).
+        await verifyWithPolling(
+            '/api/verify-booking-payment',
+            {
+                bookingId: booking.id,
+                intent: 'deposit',
+                txHash,
+                userOpHash,
+                network: bookingNetwork || 'worldchain',
+            },
+            {
+                onPending: () =>
+                    toast({ title: 'Confirming on-chain', description: 'Waiting for the deposit to be included in a block...' }),
+            },
+        );
+
+        toast({ title: 'Payment Confirmed!', description: 'Your booking is confirmed.' });
 
     } catch (error: any) {
         console.error("Payment failed:", error);
@@ -165,8 +189,10 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
             toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to complete this transaction.` });
         } else if (error.code === 'CALL_EXCEPTION') {
              toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
+        } else if (error.code === 'TX_PENDING') {
+            toast({ variant: 'destructive', title: 'Still Confirming', description: 'Your deposit was sent and is waiting for on-chain confirmation. It will be applied automatically — do not pay again.' });
         } else {
-            toast({ variant: 'destructive', title: 'Payment Failed', description: error?.reason || 'An unknown error occurred.' });
+            toast({ variant: 'destructive', title: 'Payment Failed', description: error?.message || error?.reason || 'An unknown error occurred.' });
         }
     } finally {
         setPayingBookingId(null);
@@ -200,44 +226,59 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
             return;
         }
 
-        if (!booking.clientWalletAddress || !ethPrice) {
+        if (!booking.clientWalletAddress || !tokenPrice) {
             toast({ variant: 'destructive', title: 'Refund Error', description: 'Client wallet, deposit amount, or ETH price is missing.' });
             return;
         }
 
         setUpdatingBookingId(booking.id);
         try {
-            const depositInEth = booking.depositAmount / ethPrice;
+            const depositInToken = booking.depositAmount / tokenPrice;
+            let txHash: string | null = null;
+            let userOpHash: string | null = null;
 
             if (isInWorldApp()) {
                 const userOp = await sendWorldAppTransaction({
                     to: booking.clientWalletAddress as string,
-                    valueWei: parseEther(depositInEth.toFixed(18)),
+                    valueWei: parseEther(depositInToken.toFixed(18)),
                 });
-                toast({ title: 'Refund Sent', description: 'Waiting for blockchain confirmation...' });
-                await handleUpdateStatus(booking.id, 'cancelled', { cancellationTxHash: userOp.userOpHash });
-                toast({ title: 'Booking Cancelled', description: 'The deposit has been refunded.' });
-                return;
-            }
+                userOpHash = userOp.userOpHash;
+            } else {
+                const signer = await provider.getSigner(walletAddress ?? undefined);
 
-            const signer = await provider.getSigner(walletAddress ?? undefined);
-
-            const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
-                to: booking.clientWalletAddress, // Refund to client
-                value: parseEther(depositInEth.toFixed(18))
-            };
-    
-            if (settings?.network === 'amoy') {
-                const fee = parseUnits('30', 'gwei');
-                txParams.maxPriorityFeePerGas = fee;
-                txParams.maxFeePerGas = fee;
+                const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
+                    to: booking.clientWalletAddress, // Refund to client
+                    value: parseEther(depositInToken.toFixed(18))
+                };
+        
+                if (settings?.network === 'amoy') {
+                    const fee = parseUnits('30', 'gwei');
+                    txParams.maxPriorityFeePerGas = fee;
+                    txParams.maxFeePerGas = fee;
+                }
+                const tx = await signer.sendTransaction(txParams);
+                txHash = tx.hash;
             }
-            const tx = await signer.sendTransaction(txParams);
 
             toast({ title: 'Refund Sent', description: 'Waiting for blockchain confirmation...' });
-            await tx.wait();
 
-            await handleUpdateStatus(booking.id, 'cancelled', { cancellationTxHash: tx.hash });
+            // As with the deposit, the cancellation is only recorded once the refund is
+            // proven on-chain by the server.
+            await verifyWithPolling(
+                '/api/verify-booking-payment',
+                {
+                    bookingId: booking.id,
+                    intent: 'refund',
+                    txHash,
+                    userOpHash,
+                    network: bookingNetwork || 'worldchain',
+                },
+                {
+                    onPending: () =>
+                        toast({ title: 'Confirming on-chain', description: 'Waiting for the refund to be included in a block...' }),
+                },
+            );
+
             toast({ title: 'Booking Cancelled', description: 'The deposit has been refunded.' });
 
         } catch (error: any) {
@@ -323,7 +364,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
           
           const hasAttended = perspective === 'client' ? booking.clientAttended : booking.artistAttended;
           const hasReviewed = perspective === 'client' ? booking.clientReviewed : booking.artistReviewed;
-          const depositInEth = ethPrice && booking.depositAmount ? (booking.depositAmount / ethPrice).toFixed(4) : '...';
+          const depositInToken = tokenPrice && booking.depositAmount ? (booking.depositAmount / tokenPrice).toFixed(4) : '...';
           
           const blockExplorerUrl = settings?.network === 'polygon' 
             ? 'https://polygonscan.com/tx/' 
@@ -356,7 +397,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
                   <div className="flex-grow p-4 bg-muted/50 rounded-md">
                       <p className="text-sm text-muted-foreground">{booking.description}</p>
                       {booking.depositAmount && booking.depositAmount > 0 && (
-                          <p className="text-sm font-semibold mt-2">Deposit: ${booking.depositAmount} USD (~{depositInEth} ETH)</p>
+                          <p className="text-sm font-semibold mt-2">Deposit: ${booking.depositAmount} USD (~{depositInToken} {tokenSymbol})</p>
                       )}
                   </div>
                   <div className="flex flex-col items-center justify-center gap-2 min-w-[120px]">
@@ -372,7 +413,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
                       )}
                       {perspective === 'client' && booking.status === 'awaiting_payment' && (
                           <div className="w-full space-y-2">
-                             <Button size="sm" className="w-full" onClick={() => handlePayDeposit(booking)} disabled={isPaying || !ethPrice}>
+                             <Button size="sm" className="w-full" onClick={() => handlePayDeposit(booking)} disabled={isPaying || !tokenPrice}>
                                 {isPaying ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wallet className="mr-2 h-4 w-4" />}
                                 {isPaying ? 'Processing...' : 'Pay Deposit'}
                             </Button>

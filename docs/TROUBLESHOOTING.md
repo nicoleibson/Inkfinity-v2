@@ -145,13 +145,48 @@ GET https://developer.world.org/api/v2/minikit/userop/{userOpHash}
 que responde `pending`, `failed` o un `transaction_hash` final. Además, las transacciones ERC-4337 apuntan al **EntryPoint** con `value = 0`, así que validar el `tx.to` / `tx.value` de la transacción superior **no** describe lo que el usuario firmó.
 
 ### Solution / estado actual
-`/api/verify-payment` acepta `txHash` (web) o `userOpHash` (World App) y responde `202` (pendiente), `422` (fallido) o `200` (éxito).
+Los pagos se verifican server-side; la implementación ya no tiene los fallos descritos arriba. Para diagnóstico:
 
-Limitaciones conocidas — **no actives pagos reales en la World App hasta corregirlas**:
-- La consulta se hace **una sola vez**, sin polling: un userOp todavía `pending` devuelve `202` y el cliente no reintenta, así que el usuario paga sin obtener la membresía.
-- Tras resolver, las comprobaciones leen la transacción superior, no la userOp (sender/recipient/importe no se validan de forma fiable).
-- En `booking-list.tsx` los depósitos/reembolsos se marcan confirmados de inmediato, sin verificación server-side.
+- `/api/verify-payment` y `/api/verify-booking-payment` responden:
+  - `202` + `TX_PENDING` → aún no confirmada. **El cliente reintenta solo** (polling); si ves este toast, la transferencia sí salió, no vuelvas a pagar.
+  - `409` + `PAYMENT_ALREADY_USED` → ese pago ya se canjeó. Es idempotente si es el mismo usuario.
+  - `422` + `WRONG_RECIPIENT` / `INSUFFICIENT_VALUE` → el pago no coincide con lo esperado.
+  - `422` + `USEROP_UNVERIFIABLE` → el bundler devolvió una userOp que no corresponde al hash declarado.
+  - `502` + `USEROP_LOOKUP_FAILED` → no se pudo contactar con el Developer Portal.
+  - `503` + `PRICE_UNAVAILABLE` → falta precio de referencia; no se liquida el depósito.
+  - `401` + `UNAUTHENTICATED` → sesión Firebase caducada o el cliente no envió el token.
 
-Arreglo requerido: validar sender, recipient e importe desde la respuesta del userOp, hacer polling hasta estado terminal y solo entonces activar la membresía o cambiar el estado de la reserva.
+- **Si los pagos de la World App se rechazan sistemáticamente**, revisa `RPC_WORLDCHAIN_BUNDLER_URL`. Sin bundler se usa el delta de saldo del receptor en el bloque de liquidación (correcto, pero conservative). Un bundler mal configurado hace *peor* la verificación: el código recalcula el `userOpHash` y rechaza cualquier respuesta que no coincida.
+
+- **Si el toast dice "Still Confirming"** y nunca se activa: la transacción quedó pendiente o el servidor no alcanza a confirmarla. No reintentes el pago; comprueba el `userOpHash` en WorldScan.
 
 > No resuelvas userOperations con un RPC público: los RPC públicos de WorldChain rechazan `eth_getUserOperationByHash` (Alchemy responde `401: Only core evm requests are allowed.`).
+
+---
+
+## 401 `UNAUTHENTICATED` al confirmar un pago
+
+### Problem
+El pago se envió pero el servidor responde `401` con `UNAUTHENTICATED`.
+
+### Cause
+Los endpoints de verificación usan el Admin SDK (que ignora `database.rules.json`), así que exigen `Authorization: Bearer <Firebase ID token>`. Si la sesión caducó, el `getIdToken()` devuelve un token inválido o no hay usuario.
+
+### Solution
+- El cliente obtiene el token de `auth.currentUser.getIdToken()`. Si el usuario no ha iniciado sesión, no se puede liquidar nada: eso es intencionado.
+- Tras un `firebase login`/`logout` o un refresh de token caducado, reintenta la confirmación; **no** pagues de nuevo.
+
+---
+
+## La reserva no se confirma aunque la transferencia se hizo
+
+### Problem
+El depósito se envió al wallet del artista pero la reserva sigue en `awaiting_payment`.
+
+### Cause
+El estado ya no lo escribe el cliente: `/api/verify-booking-payment` lo cambia solo tras probar la transferencia on-chain. Si la regla de la base de datos no está desplegada, o si la verificación falla, la reserva se queda como está.
+
+### Solution
+1. Despliega las reglas: `firebase deploy --only database --project inkfinity-2d470` (ver `docs/DEPLOYMENT.md` §5.2). Las reglas nuevas bloquean los campos de pago y el paso a `confirmed` desde el navegador.
+2. Comprueba la respuesta del endpoint en la consola del navegador: si es `422 INSUFFICIENT_VALUE`, el importe enviado quedó por debajo del mínimo tolerado (10% de margen sobre el precio de referencia). Si es `503 PRICE_UNAVAILABLE`, falta `PRICE_API_BASE_URL`.
+3. Verifica que el `depositAmount` de la reserva no se haya modificado: las reglas ya no permiten bajarlo.

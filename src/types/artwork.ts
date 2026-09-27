@@ -1,5 +1,7 @@
 // src/types/artwork.ts
 
+import type { NetworkName } from '@/lib/blockchain';
+
 export interface SaleRecord {
   price: number;
   timestamp: any; // ServerTimestamp
@@ -50,7 +52,7 @@ export interface Artwork {
 
   // Web3 properties
   isDigitalAsset: boolean; // Changed to non-optional
-  blockchain?: 'amoy' | 'polygon';
+  blockchain?: NetworkName;
   contractAddress?: string;
   tokenId?: string;
   ownershipMismatch?: boolean; // True if DB owner doesn't match blockchain owner

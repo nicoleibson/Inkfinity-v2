@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Wallet, ShieldCheck, Gem, Tag, CheckCircle } from 'lucide-react';
 import { parseEther, parseUnits } from 'ethers';
 import { isInWorldApp, sendWorldAppTransaction } from '@/lib/world-app';
+import { verifyWithPolling } from '@/lib/payment-verification-client';
 import { add } from 'date-fns';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -172,21 +173,25 @@ export default function PaymentForm() {
             // Membership activation is done SERVER-SIDE at /api/verify-payment.
             // The client no longer writes status/paymentDate/trialEndsAt/referral
             // fields directly (RTDB rules block those writes for non-admins and
-            // the server re-verifies the txHash on-chain before activating).
-            const verifyRes = await fetch('/api/verify-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            // the server re-verifies the payment on-chain before activating).
+            // `verifyWithPolling` retries while the endpoint answers 202, so a
+            // userOperation that is still pending no longer surfaces as a failure.
+            await verifyWithPolling(
+                '/api/verify-payment',
+                {
                     userId: user.uid,
                     txHash: txHash,
                     userOpHash: userOpHash,
-                    network: networkName || 'worldchainSepolia',
-                }),
-            });
-            const verifyData = await verifyRes.json();
-            if (!verifyData.success) {
-                throw new Error(verifyData.error || 'Payment verification failed.');
-            }
+                    network: networkName || 'worldchain',
+                    // A fully discounted fee has no transaction to verify; the server
+                    // re-derives the fee itself and decides whether this is legitimate.
+                    freePassage: fee <= 0,
+                },
+                {
+                    onPending: () =>
+                        toast({ title: 'Confirming on-chain', description: 'Waiting for the transaction to be included in a block...' }),
+                },
+            );
             
             let successMessage = 'Your account is now active. Welcome to Inkfinity!';
             if(user.role === 'Tattoo Artist') {
@@ -207,8 +212,16 @@ export default function PaymentForm() {
                 toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to complete this transaction.` });
             } else if (error.code === 'CALL_EXCEPTION') {
                  toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
+            } else if (error.code === 'TX_PENDING') {
+                 // The transfer went through but has not been confirmed yet. Say so
+                 // explicitly: the money left the wallet, so this is not a failure.
+                 toast({ variant: 'destructive', title: 'Still Confirming', description: 'Your payment was sent and is waiting for on-chain confirmation. It will be applied automatically once confirmed — do not pay again.' });
+            } else if (error.code === 'PAYMENT_ALREADY_USED') {
+                 toast({ variant: 'destructive', title: 'Payment Already Used', description: 'This payment has already been applied to your account.' });
+            } else if (error.code === 'NO_FEE_DUE') {
+                 toast({ variant: 'destructive', title: 'Nothing To Pay', description: 'No membership fee is due for your account.' });
             } else {
-                toast({ variant: 'destructive', title: 'Payment Failed', description: error?.reason || 'An unknown error occurred.' });
+                 toast({ variant: 'destructive', title: 'Payment Failed', description: error?.message || error?.reason || 'An unknown error occurred.' });
             }
         } finally {
             setIsProcessing(false);
