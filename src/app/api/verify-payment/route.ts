@@ -9,6 +9,8 @@ import {
   resolveUserOpTransactionHash,
   verifyUserOpPayment,
 } from '@/lib/server/userop-verification';
+import { addressSet } from '@/lib/server/address';
+import { claimPaymentOnce, sanitizeClaimKey } from '@/lib/server/payment-claim';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +19,8 @@ const PLATFORM_WALLET = (
   process.env.PLATFORM_WALLET_ADDRESS ||
   ''
 ).trim();
+
+const REQUIRED_CONFIRMATIONS = 5;
 
 const RPC_FALLBACK: Record<string, string> = {
   amoy: 'https://rpc-amoy.polygon.technology',
@@ -178,18 +182,98 @@ export function POST(request: NextRequest) {
       return NextResponse.json({ success: true, txHash: null, userOpHash: null, freePassage: true });
     }
 
+    // A membership transfer is public on-chain, so the claim that redeems it is
+    // also public. Without tying the sender to the authenticated account, any
+    // logged-in user could redeem somebody else's payment — and collect that
+    // payment's referral commission for their own referrer.
+    const expectedPayers = addressSet([user.walletAddress]);
+    if (!freePassage && expectedPayers.size === 0) {
+      return errorResponse(
+        422,
+        'No wallet address is recorded on your account. Add one in your profile settings before paying.',
+        'MISSING_PAYER_WALLET',
+      );
+    }
+
+    // --- Credit the payment --------------------------------------------------
+    // Both writes below are absolute rather than deltas, so re-applying them after
+    // an interrupted settlement converges on the same state instead of doubling it.
+    const creditMembership = async (
+      paymentRef: string,
+      note: string,
+      settleCommission: boolean,
+    ) => {
+      const updates: Record<string, string> = {
+        status: 'active',
+        paymentDate: new Date().toISOString(),
+        paymentTxHash: paymentRef,
+      };
+      if (user.role === 'Tattoo Artist') {
+        updates.trialEndsAt = add(new Date(), { years: 1 }).toISOString();
+      }
+      await db.ref(`users/${userId}`).update(updates);
+
+      if (!settleCommission) return;
+
+      // ---- Semanal: acumular comisión al referidor (recién pagó el referido) ----
+      // El referidor NO escribe este path: solo el server (admin SDK, supera reglas).
+      // totalWei se acumula server-side como string (BigInt) para evitar overflow 2^53.
+      if (user.referralCodeUsed && user.referredBy) {
+        const referralSnap2 = await db.ref(`referrals/${user.referralCodeUsed}`).get();
+        const commissionPct = referralSnap2.val()?.commissionPercentage || 0;
+        const referrerId = (referralSnap2.val()?.referrerId || user.referredBy || '').toString();
+
+        if (referrerId && commissionPct > 0 && referrerId !== userId) {
+          const now = new Date();
+          const weekKey = `${getISOWeekYear(now)}-W${String(getISOWeek(now)).padStart(2, '0')}`; // "2026-W39"
+
+          const earningsRef = db.ref(`users/${referrerId}/referralEarnings/${weekKey}`);
+          const [prevTotal, prevCount] = await Promise.all([
+            earningsRef.child('totalWei').get(),
+            earningsRef.child('activatedReferrals').get(),
+          ]);
+          const prevWei = prevTotal.exists() ? BigInt(prevTotal.val() || '0') : BigInt('0');
+          const prevAct = prevCount.exists() ? parseInt(prevCount.val() || '0', 10) : 0;
+          const commissionWei =
+            (BigInt(minValueWei) * BigInt(Math.round(commissionPct * 100))) / BigInt('10000');
+
+          const referenceUpdates: Record<string, unknown> = {};
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/totalWei`] = (
+            prevWei + commissionWei
+          ).toString();
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/activatedReferrals`] =
+            prevAct + 1;
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/lastActivationAt`] =
+            new Date().toISOString();
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekStart`] =
+            new Date().toISOString();
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekEnd`] =
+            new Date().toISOString();
+          referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/status`] = 'open';
+          await db.ref().update(referenceUpdates);
+        }
+      }
+
+      return note;
+    };
+
     // --- Replay protection ---------------------------------------------------
     // The same payment reference must never be redeemed twice: previously the
     // endpoint had no such check, so replaying one txHash granted an extra year of
     // membership (and another referral commission) on every call.
-    const claimKey = `${network}:${userOpHash || txHash}`.toLowerCase();
-    const claimRef = db.ref(`payment_claims/${claimKey.replace(/[^a-z0-9:-]/g, '')}`);
-    const claimSnap = await claimRef.get();
+    const claimKey = `${network}:${userOpHash || txHash}`;
+
+    const claimSnap = await db.ref(`payment_claims/${sanitizeClaimKey(claimKey)}`).get();
 
     if (claimSnap.exists()) {
       const claim = claimSnap.val();
       if (claim?.userId === userId && claim?.kind === 'membership') {
-        // Idempotent retry of a payment already credited to this same user.
+        // The claim is consumed atomically before the credit lands, so a crash in
+        // between leaves a paid user uncredited. Finish the job rather than
+        // answering "already used" to somebody who just paid.
+        if (user.paymentTxHash !== claim.paymentRef) {
+          await creditMembership(claim.paymentRef, 'recovered-claim', true);
+        }
         return NextResponse.json({
           success: true,
           txHash: claim?.paymentRef || txHash,
@@ -243,10 +327,22 @@ export function POST(request: NextRequest) {
         minValueWei,
         bundlerUrl: resolveBundlerUrl(network),
         treasuryAddress: PLATFORM_WALLET,
+        requiredConfirmations: REQUIRED_CONFIRMATIONS,
       });
 
       if (!userOpResult.ok) {
         return errorResponse(userOpResult.status, userOpResult.error, userOpResult.code);
+      }
+
+      if (!userOpResult.resolution.sender) {
+        return errorResponse(422, 'Could not determine the account that sent the payment.', 'SENDER_UNKNOWN');
+      }
+      if (!expectedPayers.has(userOpResult.resolution.sender.trim().toLowerCase())) {
+        return errorResponse(
+          422,
+          'The payment was sent from a wallet that is not registered on your account.',
+          'WRONG_SENDER',
+        );
       }
 
       paymentRef = userOpHash;
@@ -268,6 +364,13 @@ export function POST(request: NextRequest) {
           'INSUFFICIENT_VALUE',
         );
       }
+      if (!expectedPayers.has(tx.from.trim().toLowerCase())) {
+        return errorResponse(
+          422,
+          'The payment was sent from a wallet that is not registered on your account.',
+          'WRONG_SENDER',
+        );
+      }
 
       const receipt = await provider.getTransactionReceipt(txHash);
       if (!receipt) {
@@ -287,7 +390,6 @@ export function POST(request: NextRequest) {
 
       // Require a minimum confirmation depth so a reorg cannot credit a payment that
       // later disappears from the chain.
-      const REQUIRED_CONFIRMATIONS = 5;
       const head = await provider.getBlockNumber();
       if (head - receipt.blockNumber + 1 < REQUIRED_CONFIRMATIONS) {
         return errorResponse(
@@ -301,19 +403,10 @@ export function POST(request: NextRequest) {
       verificationNote = 'tx-verified';
     }
 
-    // --- Credit the payment --------------------------------------------------
-    const updates: Record<string, string> = {
-      status: 'active',
-      paymentDate: new Date().toISOString(),
-      paymentTxHash: paymentRef,
-    };
-    if (user.role === 'Tattoo Artist') {
-      updates.trialEndsAt = add(new Date(), { years: 1 }).toISOString();
-    }
-
-    // Claim first: if this write fails, nothing is credited, so a crash between the
-    // two cannot double-credit.
-    await claimRef.set({
+    // Consume the claim atomically, then credit. Exactly one caller can win the
+    // claim, so concurrent retries cannot stack extra years or extra commissions;
+    // and if the credit write fails, the next retry recovers from the claim above.
+    const claim = await claimPaymentOnce(db, claimKey, {
       userId,
       kind: 'membership',
       network,
@@ -322,52 +415,21 @@ export function POST(request: NextRequest) {
       verification: verificationNote,
       claimedAt: new Date().toISOString(),
     });
-    await db.ref(`users/${userId}`).update(updates);
-
-    // ---- Semanal: acumular comisión al referidor (recién pagó el referido) ----
-    // El referidor NO escribe este path: solo el server (admin SDK, supera reglas).
-    // totalWei se acumula server-side como string (BigInt) para evitar overflow 2^53.
-    if (user.referralCodeUsed && user.referredBy) {
-      const referralSnap2 = await db.ref(`referrals/${user.referralCodeUsed}`).get();
-      const commissionPct = referralSnap2.val()?.commissionPercentage || 0;
-      const referrerId = (referralSnap2.val()?.referrerId || user.referredBy || '').toString();
-
-      if (referrerId && commissionPct > 0 && referrerId !== userId) {
-        const now = new Date();
-        const weekKey = `${getISOWeekYear(now)}-W${String(getISOWeek(now)).padStart(2, '0')}`; // "2026-W39"
-
-        const earningsRef = db.ref(`users/${referrerId}/referralEarnings/${weekKey}`);
-        const [prevTotal, prevCount] = await Promise.all([
-          earningsRef.child('totalWei').get(),
-          earningsRef.child('activatedReferrals').get(),
-        ]);
-        const prevWei = prevTotal.exists() ? BigInt(prevTotal.val() || '0') : BigInt('0');
-        const prevAct = prevCount.exists() ? parseInt(prevCount.val() || '0', 10) : 0;
-        const commissionWei =
-          (BigInt(minValueWei) * BigInt(Math.round(commissionPct * 100))) / BigInt('10000');
-
-        const referenceUpdates: Record<string, unknown> = {};
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/totalWei`] = (
-          prevWei + commissionWei
-        ).toString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/activatedReferrals`] =
-          prevAct + 1;
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/lastActivationAt`] =
-          new Date().toISOString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekStart`] =
-          new Date().toISOString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/weekEnd`] =
-          new Date().toISOString();
-        referenceUpdates[`users/${referrerId}/referralEarnings/${weekKey}/status`] = 'open';
-        await db.ref().update(referenceUpdates);
-      }
+    if (!claim.ok) {
+      return errorResponse(500, claim.error, 'CLAIM_WRITE_FAILED');
     }
+
+    // Lost the race to a concurrent identical request: the winner already holds the
+    // claim, so re-apply its reference instead of creating a second one.
+    const settledRef = claim.created ? paymentRef : ((claim.existing?.paymentRef as string) || paymentRef);
+    const ownCommission = claim.created || user.paymentTxHash !== settledRef;
+    await creditMembership(settledRef, claim.created ? verificationNote : 'recovered-claim', ownCommission);
 
     return NextResponse.json({
       success: true,
-      txHash: userOpHash ? null : paymentRef,
+      txHash: userOpHash ? null : settledRef,
       userOpHash: userOpHash || null,
-      verification: verificationNote,
+      verification: claim.created ? verificationNote : 'recovered-claim',
     });
   })().catch((error: unknown) => {
     console.error('verify-payment error:', error);

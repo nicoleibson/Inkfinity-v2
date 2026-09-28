@@ -205,6 +205,7 @@ export async function verifyUserOpPayment(params: {
   minValueWei: bigint;
   bundlerUrl?: string;
   treasuryAddress?: string;
+  requiredConfirmations?: number;
   poll?: { timeoutMs?: number; intervalMs?: number };
 }): Promise<UserOpVerification> {
   const { provider, userOpHash, transactionHash, expectedTo, minValueWei } = params;
@@ -234,6 +235,24 @@ export async function verifyUserOpPayment(params: {
       code: 'USEROP_REVERTED',
       error: 'The settling transaction reverted on-chain.',
     };
+  }
+
+  // Confirmation depth. A direct transfer is only credited after a handful of
+  // blocks so a reorg cannot credit a payment that later disappears from the
+  // chain; user operations were skipping that guard, so they are held to the
+  // same standard here (the caller polls, so this only costs a few seconds).
+  const requiredConfirmations = params.requiredConfirmations || 0;
+  if (requiredConfirmations > 0) {
+    const head = await provider.getBlockNumber();
+    const depth = head - receipt.blockNumber + 1;
+    if (depth < requiredConfirmations) {
+      return {
+        ok: false,
+        status: 202,
+        code: 'USEROP_PENDING',
+        error: `The transaction has only ${depth} confirmation(s); ${requiredConfirmations} are required. Try again shortly.`,
+      };
+    }
   }
 
   // (1) Authoritative on-chain binding: the op exists, succeeded, and its sender.

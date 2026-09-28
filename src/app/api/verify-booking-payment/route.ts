@@ -9,6 +9,8 @@ import {
   resolveUserOpTransactionHash,
   verifyUserOpPayment,
 } from '@/lib/server/userop-verification';
+import { isSameAddress, isValidAddress } from '@/lib/server/address';
+import { claimPaymentOnce, sanitizeClaimKey } from '@/lib/server/payment-claim';
 
 export const runtime = 'nodejs';
 
@@ -137,7 +139,10 @@ export function POST(request: NextRequest) {
     // bound that cannot be computed is not a bound.
     const expectedRecipient =
       intent === 'deposit' ? booking.artistWalletAddress : booking.clientWalletAddress;
-    const payer = intent === 'deposit' ? booking.clientId : booking.artistId;
+    // The payer must be compared as an on-chain address. `clientId`/`artistId` are
+    // Firebase UIDs, not addresses: comparing them against the transaction sender
+    // rejected every legitimate deposit and refund.
+    const payer = intent === 'deposit' ? booking.clientWalletAddress : booking.artistWalletAddress;
 
     if (!expectedRecipient || !/^0x[0-9a-fA-F]{40}$/.test(expectedRecipient)) {
       return errorResponse(
@@ -146,6 +151,15 @@ export function POST(request: NextRequest) {
           ? 'The artist has no wallet address recorded; the deposit cannot be settled.'
           : 'The client has no wallet address recorded; the refund cannot be sent.',
         'MISSING_RECIPIENT',
+      );
+    }
+    if (!isValidAddress(payer)) {
+      return errorResponse(
+        422,
+        intent === 'deposit'
+          ? 'Your wallet address is not recorded on this booking; the deposit cannot be verified.'
+          : 'The artist has no wallet address recorded on this booking; the refund cannot be verified.',
+        'MISSING_PAYER_WALLET',
       );
     }
 
@@ -166,10 +180,45 @@ export function POST(request: NextRequest) {
     const provider = new JsonRpcProvider(rpcUrl);
 
     // Replay protection: one payment reference settles one booking transition.
-    const claimKey = `${network}:${bookingId}:${intent}`.toLowerCase().replace(/[^a-z0-9:-]/g, '');
-    const claimRef = db.ref(`payment_claims/${claimKey}`);
-    const claimSnap = await claimRef.get();
+    const claimKey = `${network}:${bookingId}:${intent}`;
+    const nextStatus = intent === 'deposit' ? 'confirmed' : 'cancelled';
+    const hashField = intent === 'deposit' ? 'paymentTxHash' : 'cancellationTxHash';
+    const confirmedField = `${intent === 'deposit' ? 'deposit' : 'refund'}ConfirmedAt`;
+    const stateBefore = intent === 'deposit' ? 'awaiting_payment' : 'confirmed';
+
+    // Idempotent settlement: writing the same transition twice is harmless, which is
+    // what makes crash recovery possible below.
+    const settleBooking = (paymentRef: string) =>
+      bookingRef.update({
+        status: nextStatus,
+        [hashField]: paymentRef,
+        [confirmedField]: new Date().toISOString(),
+      });
+
+    const claimSnap = await db.ref(`payment_claims/${sanitizeClaimKey(claimKey)}`).get();
     if (claimSnap.exists()) {
+      const existing = claimSnap.val();
+      if (existing?.userId === uid && existing?.kind === `booking:${intent}`) {
+        // The settlement either finished (booking already moved on) or was
+        // interrupted after the claim was consumed. Re-apply it instead of
+        // reporting "already used", which would strand a paid booking forever.
+        if (booking.status === nextStatus) {
+          return NextResponse.json({
+            success: true,
+            status: nextStatus,
+            paymentRef: existing.paymentRef,
+            alreadySettled: true,
+          });
+        }
+        if (booking.status === stateBefore) {
+          await settleBooking(existing.paymentRef);
+          return NextResponse.json({
+            success: true,
+            status: nextStatus,
+            paymentRef: existing.paymentRef,
+          });
+        }
+      }
       return errorResponse(409, 'This booking payment has already been settled.', 'PAYMENT_ALREADY_USED');
     }
 
@@ -207,11 +256,19 @@ export function POST(request: NextRequest) {
         minValueWei,
         bundlerUrl: resolveBundlerUrl(network),
         treasuryAddress: expectedRecipient,
+        requiredConfirmations: REQUIRED_CONFIRMATIONS,
       });
       if (!result.ok) {
         return errorResponse(result.status, result.error, result.code);
       }
-      if (result.resolution.sender && result.resolution.sender.toLowerCase() !== payer.toLowerCase()) {
+      if (!result.resolution.sender) {
+        return errorResponse(
+          422,
+          'Could not determine the account that sent the payment.',
+          'SENDER_UNKNOWN',
+        );
+      }
+      if (!isSameAddress(result.resolution.sender, payer)) {
         return errorResponse(
           422,
           'The transaction was sent by a different account than the expected payer.',
@@ -239,7 +296,7 @@ export function POST(request: NextRequest) {
           'INSUFFICIENT_VALUE',
         );
       }
-      if (tx.from.toLowerCase() !== payer.toLowerCase()) {
+      if (!isSameAddress(tx.from, payer)) {
         return errorResponse(
           422,
           'The transaction was sent by a different account than the expected payer.',
@@ -270,10 +327,10 @@ export function POST(request: NextRequest) {
       paymentRef = txHash;
     }
 
-    const nextStatus = intent === 'deposit' ? 'confirmed' : 'cancelled';
-    const hashField = intent === 'deposit' ? 'paymentTxHash' : 'cancellationTxHash';
-
-    await claimRef.set({
+    // Consume the claim atomically so two concurrent requests cannot both settle
+    // the same booking, then apply the transition. If the second write fails, the
+    // next retry detects the consumed-but-unsettled claim above and finishes it.
+    const claim = await claimPaymentOnce(db, claimKey, {
       userId: uid,
       kind: `booking:${intent}`,
       bookingId,
@@ -282,17 +339,17 @@ export function POST(request: NextRequest) {
       userOpHash: userOpHash || null,
       claimedAt: new Date().toISOString(),
     });
+    if (!claim.ok) {
+      return errorResponse(500, claim.error, 'CLAIM_WRITE_FAILED');
+    }
 
-    await bookingRef.update({
-      status: nextStatus,
-      [hashField]: paymentRef,
-      [`${intent === 'deposit' ? 'deposit' : 'refund'}ConfirmedAt`]: new Date().toISOString(),
-    });
+    const settledRef = claim.created ? paymentRef : (claim.existing?.paymentRef as string) || paymentRef;
+    await settleBooking(settledRef);
 
     return NextResponse.json({
       success: true,
       status: nextStatus,
-      paymentRef,
+      paymentRef: settledRef,
     });
   })().catch((error: unknown) => {
     console.error('verify-booking-payment error:', error);

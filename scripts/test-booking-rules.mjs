@@ -15,7 +15,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { ref, set, update } from 'firebase/database';
+import { ref, set, update, get } from 'firebase/database';
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'inkfinity-2d470';
 
@@ -142,6 +142,22 @@ await check('super-admin confirma reserva CON depósito', 'allow', () =>
 
 await check('admin escribe refundConfirmedAt', 'allow', () =>
   update(root('admin1'), { '/bookings/b_paid/refundConfirmedAt': 1 }));
+
+// --- payment_claims: solo el servidor ---
+// Las rutas de verificación recuperan una liquidación interrumpida a partir del
+// claim registrado. Si un cliente pudiera escribirlo, podría auto-satisfacer una
+// reserva sin pagar. Deny-by-default en la raíz, pero se fija con un test.
+await check('cliente NO crea un claim de pago', 'deny', () =>
+  update(root('client1'), { '/payment_claims/worldchain:b_paid:deposit': { userId: 'client1', kind: 'booking:deposit', paymentRef: HASH } }));
+
+await check('artista NO crea un claim de pago', 'deny', () =>
+  update(root('artist1'), { '/payment_claims/worldchain:b_paid:refund': { userId: 'artist1', kind: 'booking:refund', paymentRef: HASH } }));
+
+await check('anónimo NO lee los claims de pago', 'deny', () =>
+  get(guest(), '/payment_claims'));
+
+await check('cliente autenticado NO lee los claims de pago', 'deny', () =>
+  get(root('client1'), '/payment_claims'));
 
 await env.cleanup();
 

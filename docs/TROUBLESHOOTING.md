@@ -148,9 +148,12 @@ que responde `pending`, `failed` o un `transaction_hash` final. Además, las tra
 Los pagos se verifican server-side; la implementación ya no tiene los fallos descritos arriba. Para diagnóstico:
 
 - `/api/verify-payment` y `/api/verify-booking-payment` responden:
-  - `202` + `TX_PENDING` → aún no confirmada. **El cliente reintenta solo** (polling); si ves este toast, la transferencia sí salió, no vuelvas a pagar.
-  - `409` + `PAYMENT_ALREADY_USED` → ese pago ya se canjeó. Es idempotente si es el mismo usuario.
+  - `202` + `TX_PENDING` → aún no confirmada. **El cliente reintenta solo** (polling); si ves este toast, la transferencia sí salió, no vuelvas a pagar. Las userOps también necesitan 5 confirmaciones, así que esta respuesta es normal en los primeros segundos.
+  - `409` + `PAYMENT_ALREADY_USED` → otro usuario (u otra reserva) canjeó ese pago. Si es el **mismo** usuario y la misma reserva, la respuesta es un éxito idempotente, no un error: reintentar es seguro.
   - `422` + `WRONG_RECIPIENT` / `INSUFFICIENT_VALUE` → el pago no coincide con lo esperado.
+  - `422` + `WRONG_SENDER` → el pago salió de una wallet que no es la registrada en la cuenta. Suele ser la wallet equivocada en el perfil, no un intento de fraude: corrige `walletAddress` y vuelve a pagar.
+  - `422` + `MISSING_PAYER_WALLET` → la cuenta (o la reserva) no tiene `walletAddress` registrado. El servidor falla en cerrado en vez de adivinar: rellénalo en Ajustes antes de pagar.
+  - `422` + `SENDER_UNKNOWN` → no se pudo determinar quién envió el pago; no se liquida.
   - `422` + `USEROP_UNVERIFIABLE` → el bundler devolvió una userOp que no corresponde al hash declarado.
   - `502` + `USEROP_LOOKUP_FAILED` → no se pudo contactar con el Developer Portal.
   - `503` + `PRICE_UNAVAILABLE` → falta precio de referencia; no se liquida el depósito.
