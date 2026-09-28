@@ -195,6 +195,25 @@ export function POST(request: NextRequest) {
       );
     }
 
+    // "One wallet, one account" is only enforced in the browser today
+    // (`linkWalletToAccount`), and `users` is publicly readable, so the check is
+    // trivially bypassed: a caller could declare somebody else's wallet on their
+    // own profile and then redeem that person's public membership transfer.
+    // Re-check ownership here, authoritatively, at the only moment it matters.
+    // `walletAddress` is indexed, so these are three cheap point lookups.
+    const isWalletUnclaimed = async (sender: string) => {
+      const variants = new Set([sender.trim(), sender.trim().toLowerCase()]);
+      for (const variant of variants) {
+        const owners = await db.ref('users').orderByChild('walletAddress').equalTo(variant).get();
+        let conflict = false;
+        owners.forEach((owner) => {
+          if (owner.key !== userId) conflict = true;
+        });
+        if (conflict) return false;
+      }
+      return true;
+    };
+
     // --- Credit the payment --------------------------------------------------
     // Both writes below are absolute rather than deltas, so re-applying them after
     // an interrupted settlement converges on the same state instead of doubling it.
@@ -344,6 +363,13 @@ export function POST(request: NextRequest) {
           'WRONG_SENDER',
         );
       }
+      if (!(await isWalletUnclaimed(userOpResult.resolution.sender))) {
+        return errorResponse(
+          422,
+          'That wallet is registered to a different account, so its payments cannot be redeemed here.',
+          'WALLET_CLAIMED_BY_ANOTHER_ACCOUNT',
+        );
+      }
 
       paymentRef = userOpHash;
       verificationNote = userOpResult.resolution.exactRecipientVerified
@@ -369,6 +395,13 @@ export function POST(request: NextRequest) {
           422,
           'The payment was sent from a wallet that is not registered on your account.',
           'WRONG_SENDER',
+        );
+      }
+      if (!(await isWalletUnclaimed(tx.from))) {
+        return errorResponse(
+          422,
+          'That wallet is registered to a different account, so its payments cannot be redeemed here.',
+          'WALLET_CLAIMED_BY_ANOTHER_ACCOUNT',
         );
       }
 

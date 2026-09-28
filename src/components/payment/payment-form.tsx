@@ -18,6 +18,7 @@ import { Loader2, Wallet, ShieldCheck, Gem, Tag, CheckCircle } from 'lucide-reac
 import { parseEther, parseUnits } from 'ethers';
 import { isInWorldApp, sendWorldAppTransaction } from '@/lib/world-app';
 import { verifyWithPolling } from '@/lib/payment-verification-client';
+import { clearPendingPayment, loadPendingPayment, savePendingPayment } from '@/lib/pending-payment';
 import { add } from 'date-fns';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -36,6 +37,9 @@ export default function PaymentForm() {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
+    // A payment that is on-chain but not yet credited. Kept (and persisted) so the
+    // user can re-check it instead of paying a second time.
+    const [pendingPayment, setPendingPayment] = useState<{ txHash: string | null; userOpHash: string | null; network: string } | null>(null);
     
     const [referralCode, setReferralCode] = useState('');
     const [referral, setReferral] = useState<Referral | null>(null);
@@ -116,6 +120,74 @@ export default function PaymentForm() {
         return { fee: finalFee, originalFee: baseFee, discount, title, description };
     };
     
+    const PENDING_SLOT = 'membership';
+
+    // Restore a payment that was sent but never confirmed, so a reload cannot lead
+    // the user to pay a second time for the same thing.
+    useEffect(() => {
+        setPendingPayment(loadPendingPayment(PENDING_SLOT));
+    }, []);
+
+    type PaymentRef = { txHash: string | null; userOpHash: string | null; network: string };
+
+    /**
+     * Membership activation is done SERVER-SIDE at /api/verify-payment. The client
+     * only sends the reference; the server re-verifies on-chain and credits. Kept
+     * separate from `handlePayment` so an already-sent payment can be re-checked
+     * without sending a new transaction.
+     */
+    const runVerification = async (ref: PaymentRef, freePassage: boolean) => {
+        if (!user) return;
+        await verifyWithPolling(
+            '/api/verify-payment',
+            {
+                userId: user.uid,
+                txHash: ref.txHash,
+                userOpHash: ref.userOpHash,
+                network: ref.network || 'worldchain',
+                freePassage,
+            },
+            {
+                onPending: () =>
+                    toast({ title: 'Confirming on-chain', description: 'Waiting for the transaction to be included in a block...' }),
+            },
+        );
+
+        clearPendingPayment(PENDING_SLOT);
+        setPendingPayment(null);
+
+        const successMessage = user.role === 'Tattoo Artist'
+            ? 'Your membership has been renewed for another year!'
+            : 'Your account is now active. Welcome to Inkfinity!';
+
+        toast({
+            title: "Payment Confirmed!",
+            description: successMessage,
+            className: "bg-green-500 text-white"
+        });
+
+        router.push('/');
+    };
+
+    /** Manual retry for a payment that is on-chain but not credited yet. */
+    const handleRetryVerification = async () => {
+        if (!pendingPayment) return;
+        setIsProcessing(true);
+        try {
+            await runVerification(pendingPayment, false);
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Still Not Confirmed',
+                description: error?.code === 'PAYMENT_ALREADY_USED'
+                    ? 'This payment was already applied.'
+                    : 'The payment is still not confirmed. Wait a few seconds and try again — do not send a new payment.',
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handlePayment = async () => {
         if (!user || !provider || !isConnected) {
             toast({ variant: 'destructive', title: "Wallet Not Ready", description: "Please connect your wallet." });
@@ -170,41 +242,17 @@ export default function PaymentForm() {
                 }
             }
 
-            // Membership activation is done SERVER-SIDE at /api/verify-payment.
-            // The client no longer writes status/paymentDate/trialEndsAt/referral
-            // fields directly (RTDB rules block those writes for non-admins and
-            // the server re-verifies the payment on-chain before activating).
-            // `verifyWithPolling` retries while the endpoint answers 202, so a
-            // userOperation that is still pending no longer surfaces as a failure.
-            await verifyWithPolling(
-                '/api/verify-payment',
-                {
-                    userId: user.uid,
-                    txHash: txHash,
-                    userOpHash: userOpHash,
-                    network: networkName || 'worldchain',
-                    // A fully discounted fee has no transaction to verify; the server
-                    // re-derives the fee itself and decides whether this is legitimate.
-                    freePassage: fee <= 0,
-                },
-                {
-                    onPending: () =>
-                        toast({ title: 'Confirming on-chain', description: 'Waiting for the transaction to be included in a block...' }),
-                },
-            );
-            
-            let successMessage = 'Your account is now active. Welcome to Inkfinity!';
-            if(user.role === 'Tattoo Artist') {
-                successMessage = 'Your membership has been renewed for another year!';
-            }
-            
-            toast({ 
-                title: "Payment Confirmed!",
-                description: successMessage,
-                className: "bg-green-500 text-white"
-            });
-            
-            router.push('/');
+            // Persist the reference BEFORE verifying it. If verification times out, the
+            // user must be able to re-check this payment rather than send another one.
+            const paymentRef: PaymentRef = {
+                txHash,
+                userOpHash,
+                network: networkName || 'worldchain',
+            };
+            savePendingPayment(PENDING_SLOT, paymentRef);
+            setPendingPayment(paymentRef);
+
+            await runVerification(paymentRef, fee <= 0);
 
         } catch (error: any) {
             console.error("Payment failed:", error);
@@ -214,8 +262,9 @@ export default function PaymentForm() {
                  toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
             } else if (error.code === 'TX_PENDING') {
                  // The transfer went through but has not been confirmed yet. Say so
-                 // explicitly: the money left the wallet, so this is not a failure.
-                 toast({ variant: 'destructive', title: 'Still Confirming', description: 'Your payment was sent and is waiting for on-chain confirmation. It will be applied automatically once confirmed — do not pay again.' });
+                 // explicitly: the money left the wallet, so this is not a failure —
+                 // and there is no background job, so the retry is the user's job.
+                 toast({ variant: 'destructive', title: 'Awaiting Confirmation', description: 'Your payment was sent and is waiting for on-chain confirmation. Do not pay again — press "Check again" in a few seconds to activate your account.' });
             } else if (error.code === 'PAYMENT_ALREADY_USED') {
                  toast({ variant: 'destructive', title: 'Payment Already Used', description: 'This payment has already been applied to your account.' });
             } else if (error.code === 'NO_FEE_DUE') {
@@ -294,7 +343,28 @@ return (
                 </div>
             </CardContent>
             <CardFooter>
-                {isConnected ? (
+                {pendingPayment ? (
+                    // The money already left the wallet: the only correct action is to
+                    // re-check this payment, never to send another one.
+                    <div className="w-full space-y-3">
+                        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                            <p className="font-semibold text-amber-500">Payment sent — awaiting confirmation</p>
+                            <p className="mt-1 text-muted-foreground">
+                                Your payment is on-chain but not activated yet. It usually confirms within a few
+                                seconds. Do not pay again.
+                            </p>
+                            {(pendingPayment.userOpHash || pendingPayment.txHash) && (
+                                <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground/80">
+                                    {pendingPayment.userOpHash || pendingPayment.txHash}
+                                </p>
+                            )}
+                        </div>
+                        <Button className="w-full" size="lg" onClick={handleRetryVerification} disabled={isProcessing}>
+                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-4 w-4"/>}
+                            {isProcessing ? 'Checking...' : 'Check again'}
+                        </Button>
+                    </div>
+                ) : isConnected ? (
                     <Button className="w-full" size="lg" onClick={handlePayment} disabled={isProcessing || !PLATFORM_WALLET_ADDRESS}>
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wallet className="mr-2 h-4 w-4"/>}
                         {isProcessing ? 'Processing Payment...' : `Pay ${fee.toFixed(4)} ${tokenSymbol} Now`}

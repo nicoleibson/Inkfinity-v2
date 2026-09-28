@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { clearPendingPayment, loadPendingPayment, savePendingPayment, type PendingPayment } from '@/lib/pending-payment';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Booking, BookingStatus } from '@/types/booking';
 import type { UserProfile, Notification } from '@/types/user';
 import { format, parseISO, isPast } from 'date-fns';
-import { Calendar, Check, Clock, User, X, Wallet, Loader2, CheckCheck, Star, Ban } from 'lucide-react';
+import { Calendar, Check, Clock, User, X, Wallet, Loader2, CheckCheck, Star, Ban, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { database } from '@/lib/firebase-config';
 import { ref, update, push, serverTimestamp, get } from 'firebase/database';
@@ -45,6 +46,9 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
   const bookingNetwork = isInWorldApp() ? 'worldchain' : settings?.network;
   const tokenSymbol = NETWORK_TOKEN_SYMBOL[bookingNetwork as keyof typeof NETWORK_TOKEN_SYMBOL] ?? 'WLD';
   const [payingBookingId, setPayingBookingId] = useState<string | null>(null);
+  // Payments that are on-chain but not settled yet, keyed by `${bookingId}:${intent}`.
+  // Persisted so a reload cannot push the user into paying a deposit twice.
+  const [pendingPayments, setPendingPayments] = useState<Record<string, PendingPayment>>({});
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -120,6 +124,79 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
     handleUpdateStatus(booking.id, newStatus);
   };
 
+  const slotFor = (bookingId: string, intent: 'deposit' | 'refund') => `booking:${bookingId}:${intent}`;
+
+  // Pick up deposits/refunds that were sent but never confirmed in a previous visit.
+  useEffect(() => {
+    const recovered: Record<string, PendingPayment> = {};
+    for (const booking of bookings) {
+      for (const intent of ['deposit', 'refund'] as const) {
+        const stored = loadPendingPayment(slotFor(booking.id, intent));
+        if (stored) recovered[`${booking.id}:${intent}`] = stored;
+      }
+    }
+    setPendingPayments(recovered);
+    // `bookings` is a fresh array on every fetch; the key we care about is its ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookings.map((b) => b.id).join(',')]);
+
+  const rememberPending = (bookingId: string, intent: 'deposit' | 'refund', payment: PendingPayment) => {
+    savePendingPayment(slotFor(bookingId, intent), payment);
+    setPendingPayments((prev) => ({ ...prev, [`${bookingId}:${intent}`]: payment }));
+  };
+
+  const forgetPending = (bookingId: string, intent: 'deposit' | 'refund') => {
+    clearPendingPayment(slotFor(bookingId, intent));
+    setPendingPayments((prev) => {
+      const next = { ...prev };
+      delete next[`${bookingId}:${intent}`];
+      return next;
+    });
+  };
+
+  /**
+   * Re-checks an already-sent deposit or refund. Safe to repeat: the server consumes
+   * the payment claim atomically, so this can never settle the booking twice.
+   */
+  const handleRetryBookingVerification = async (booking: Booking, intent: 'deposit' | 'refund') => {
+    const pending = pendingPayments[`${booking.id}:${intent}`];
+    if (!pending) return;
+
+    intent === 'deposit' ? setPayingBookingId(booking.id) : setUpdatingBookingId(booking.id);
+    try {
+      await verifyWithPolling(
+        '/api/verify-booking-payment',
+        {
+          bookingId: booking.id,
+          intent,
+          txHash: pending.txHash,
+          userOpHash: pending.userOpHash,
+          network: pending.network || bookingNetwork || 'worldchain',
+        },
+        {
+          onPending: () =>
+            toast({ title: 'Confirming on-chain', description: 'Waiting for the transfer to be included in a block...' }),
+        },
+      );
+
+      forgetPending(booking.id, intent);
+      toast({
+        title: intent === 'deposit' ? 'Payment Confirmed!' : 'Booking Cancelled',
+        description: intent === 'deposit' ? 'Your booking is confirmed.' : 'The deposit has been refunded.',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Still Not Confirmed',
+        description: error?.code === 'PAYMENT_ALREADY_USED'
+          ? 'This payment was already applied.'
+          : 'The transfer is still not confirmed. Wait a few seconds and try again — do not send a new payment.',
+      });
+    } finally {
+      intent === 'deposit' ? setPayingBookingId(null) : setUpdatingBookingId(null);
+    }
+  };
+
   const handlePayDeposit = async (booking: Booking) => {
     if (!isConnected || !provider) {
         toast({ variant: 'destructive', title: 'Wallet Not Connected', description: 'Please connect your wallet to pay.' });
@@ -166,6 +243,10 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         // on-chain. The client no longer flips the status itself: doing so credited
         // deposits that were never paid (and World App user operations are not even
         // mined when the wallet returns the hash).
+        // Persist the reference before verifying, so a timeout leaves the user with a
+        // way to retry rather than a reason to pay twice.
+        rememberPending(booking.id, 'deposit', { txHash, userOpHash, network: bookingNetwork || 'worldchain' });
+
         await verifyWithPolling(
             '/api/verify-booking-payment',
             {
@@ -181,6 +262,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
             },
         );
 
+        forgetPending(booking.id, 'deposit');
         toast({ title: 'Payment Confirmed!', description: 'Your booking is confirmed.' });
 
     } catch (error: any) {
@@ -190,7 +272,9 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
         } else if (error.code === 'CALL_EXCEPTION') {
              toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The transaction is likely to fail. Please check your wallet balance and network, then try again.' });
         } else if (error.code === 'TX_PENDING') {
-            toast({ variant: 'destructive', title: 'Still Confirming', description: 'Your deposit was sent and is waiting for on-chain confirmation. It will be applied automatically — do not pay again.' });
+            // There is no background job: the retry is the user's job, and the button
+            // now says exactly that. Keep the reference so the retry is free.
+            toast({ variant: 'destructive', title: 'Awaiting Confirmation', description: 'Your deposit was sent and is waiting for on-chain confirmation. Do not pay again — press "Check again" in a few seconds.' });
         } else {
             toast({ variant: 'destructive', title: 'Payment Failed', description: error?.message || error?.reason || 'An unknown error occurred.' });
         }
@@ -263,7 +347,10 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
             toast({ title: 'Refund Sent', description: 'Waiting for blockchain confirmation...' });
 
             // As with the deposit, the cancellation is only recorded once the refund is
-            // proven on-chain by the server.
+            // proven on-chain by the server. Persist the reference first so an
+            // unconfirmed refund can be retried instead of re-sent.
+            rememberPending(booking.id, 'refund', { txHash, userOpHash, network: bookingNetwork || 'worldchain' });
+
             await verifyWithPolling(
                 '/api/verify-booking-payment',
                 {
@@ -279,6 +366,7 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
                 },
             );
 
+            forgetPending(booking.id, 'refund');
             toast({ title: 'Booking Cancelled', description: 'The deposit has been refunded.' });
 
         } catch (error: any) {
@@ -287,6 +375,10 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
                 toast({ variant: 'destructive', title: 'Insufficient Funds', description: `You do not have enough ${tokenSymbol} in your wallet to process the refund.` });
             } else if (error.code === 'CALL_EXCEPTION') {
                  toast({ variant: 'destructive', title: 'Transaction Failed', description: 'The refund transaction is likely to fail. Please check your wallet balance and network, then try again.' });
+            } else if (error.code === 'TX_PENDING') {
+                // No background job: the retry belongs to the artist, and the cancel
+                // button now offers it without sending a second refund.
+                toast({ variant: 'destructive', title: 'Awaiting Confirmation', description: 'The refund was sent and is waiting for on-chain confirmation. Do not refund again — check it again in a few seconds.' });
             } else {
                 toast({ variant: 'destructive', title: 'Cancellation Failed', description: error?.reason || 'An unknown error occurred.' });
             }
@@ -413,21 +505,49 @@ export function BookingList({ bookings, perspective, currentUser }: BookingListP
                       )}
                       {perspective === 'client' && booking.status === 'awaiting_payment' && (
                           <div className="w-full space-y-2">
-                             <Button size="sm" className="w-full" onClick={() => handlePayDeposit(booking)} disabled={isPaying || !tokenPrice}>
-                                {isPaying ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wallet className="mr-2 h-4 w-4" />}
-                                {isPaying ? 'Processing...' : 'Pay Deposit'}
-                            </Button>
-                            <Button size="sm" variant="ghost" className="w-full" onClick={() => handleUpdateStatus(booking.id, 'cancelled')} disabled={isUpdating}>
-                                <Ban className="mr-2 h-4 w-4" /> Cancel
-                            </Button>
+                             {pendingPayments[`${booking.id}:deposit`] ? (
+                                 // The deposit is already on-chain. Paying again would send
+                                 // a second transfer, so only re-verification is offered.
+                                 <div className="w-full space-y-1.5">
+                                     <Button size="sm" className="w-full" onClick={() => handleRetryBookingVerification(booking, 'deposit')} disabled={isPaying}>
+                                        {isPaying ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                        {isPaying ? 'Checking...' : 'Check again'}
+                                     </Button>
+                                     <p className="text-[11px] text-center text-amber-500">
+                                         Deposit sent, awaiting confirmation. Do not pay again.
+                                     </p>
+                                 </div>
+                             ) : (
+                                 <Button size="sm" className="w-full" onClick={() => handlePayDeposit(booking)} disabled={isPaying || !tokenPrice}>
+                                    {isPaying ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wallet className="mr-2 h-4 w-4" />}
+                                    {isPaying ? 'Processing...' : 'Pay Deposit'}
+                                </Button>
+                             )}
+                             <Button size="sm" variant="ghost" className="w-full" onClick={() => handleUpdateStatus(booking.id, 'cancelled')} disabled={isUpdating}>
+                                 <Ban className="mr-2 h-4 w-4" /> Cancel
+                             </Button>
                           </div>
                       )}
                        {booking.status === 'confirmed' && !isPast(bookingDate) && (
-                         <Button size="sm" variant="destructive" className="w-full" onClick={() => handleCancelBooking(booking)} disabled={isUpdating}>
-                            <Ban className="mr-2 h-4 w-4" />
-                            {isUpdating ? 'Cancelling...' : 'Cancel'}
-                         </Button>
-                      )}
+                          pendingPayments[`${booking.id}:refund`] ? (
+                              // A refund is already in flight: re-check it instead of
+                              // sending the artist's money a second time.
+                              <div className="w-full space-y-1.5">
+                                  <Button size="sm" className="w-full" onClick={() => handleRetryBookingVerification(booking, 'refund')} disabled={isUpdating}>
+                                      {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                      {isUpdating ? 'Checking...' : 'Check refund'}
+                                  </Button>
+                                  <p className="text-[11px] text-center text-amber-500">
+                                      Refund sent, awaiting confirmation. Do not refund again.
+                                  </p>
+                              </div>
+                          ) : (
+                          <Button size="sm" variant="destructive" className="w-full" onClick={() => handleCancelBooking(booking)} disabled={isUpdating}>
+                             <Ban className="mr-2 h-4 w-4" />
+                             {isUpdating ? 'Cancelling...' : 'Cancel'}
+                          </Button>
+                          )
+                       )}
                       {booking.status === 'confirmed' && isPast(bookingDate) && (
                           <Button size="sm" className="w-full" variant="outline" onClick={() => handleMarkAttended(booking)} disabled={hasAttended || isUpdating}>
                               {isUpdating ? <Loader2 className="animate-spin" /> : (hasAttended ? <CheckCheck className="mr-2 h-4 w-4 text-green-500" /> : <Check className="mr-2 h-4 w-4" />)}

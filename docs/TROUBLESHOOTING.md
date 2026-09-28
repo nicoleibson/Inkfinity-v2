@@ -154,6 +154,7 @@ Los pagos se verifican server-side; la implementación ya no tiene los fallos de
   - `422` + `WRONG_SENDER` → el pago salió de una wallet que no es la registrada en la cuenta. Suele ser la wallet equivocada en el perfil, no un intento de fraude: corrige `walletAddress` y vuelve a pagar.
   - `422` + `MISSING_PAYER_WALLET` → la cuenta (o la reserva) no tiene `walletAddress` registrado. El servidor falla en cerrado en vez de adivinar: rellénalo en Ajustes antes de pagar.
   - `422` + `SENDER_UNKNOWN` → no se pudo determinar quién envió el pago; no se liquida.
+  - `422` + `WALLET_CLAIMED_BY_ANOTHER_ACCOUNT` → esa wallet ya está vinculada a otra cuenta. No es un fallo del pago: revisa que estés conectado con la wallet correcta.
   - `422` + `USEROP_UNVERIFIABLE` → el bundler devolvió una userOp que no corresponde al hash declarado.
   - `502` + `USEROP_LOOKUP_FAILED` → no se pudo contactar con el Developer Portal.
   - `503` + `PRICE_UNAVAILABLE` → falta precio de referencia; no se liquida el depósito.
@@ -161,7 +162,7 @@ Los pagos se verifican server-side; la implementación ya no tiene los fallos de
 
 - **Si los pagos de la World App se rechazan sistemáticamente**, revisa `RPC_WORLDCHAIN_BUNDLER_URL`. Sin bundler se usa el delta de saldo del receptor en el bloque de liquidación (correcto, pero conservative). Un bundler mal configurado hace *peor* la verificación: el código recalcula el `userOpHash` y rechaza cualquier respuesta que no coincida.
 
-- **Si el toast dice "Still Confirming"** y nunca se activa: la transacción quedó pendiente o el servidor no alcanza a confirmarla. No reintentes el pago; comprueba el `userOpHash` en WorldScan.
+- **Si el toast dice "Awaiting Confirmation"**: la transferencia salió pero aún no hay 5 confirmaciones. **No vuelvas a pagar.** El polling dura 2 minutos; si se agota, la referencia del pago queda guardada en el navegador y el botón pasa a ser **"Check again"** (o "Check refund" para el artista), que solo re-verifica sin enviar nada. Ese reintento es seguro: el servidor consume el claim de forma atómica y no puede liquidar dos veces. La referencia también se muestra en pantalla para comprobar el estado en WorldScan. No hay job en background: si el usuario cierra la página, el botón sigue ahí al volver, porque la referencia se persiste en `localStorage` (`src/lib/pending-payment.ts`). Esa referencia caduca a los **7 días**: pasado ese plazo el botón vuelve a ser el de pago normal, porque una transferencia sin confirmar en una semana ya no se va a liquidar presionando un botón.
 
 > No resuelvas userOperations con un RPC público: los RPC públicos de WorldChain rechazan `eth_getUserOperationByHash` (Alchemy responde `401: Only core evm requests are allowed.`).
 
