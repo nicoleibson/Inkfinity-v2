@@ -55,7 +55,9 @@ export default function WorldIdVerification({ verified, verifiedAt }: { verified
           signature: rp.signature,
         },
         allow_legacy_proofs: true,
-        environment: 'production',
+        // El servidor decide el entorno (production|staging) y lo publica en
+        // rp_context; el cliente no lo fija, para no divergir del servidor.
+        environment: rp.environment,
       }).preset(orbLegacy());
 
       const completion = await request.pollUntilCompletion({ timeout: 120000 });

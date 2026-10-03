@@ -224,3 +224,28 @@ Linking returns `409` even though the person believes they never verified before
 
 ### Solution
 Sign in with the original account. If the original account is inaccessible, this needs a manual review: the raw nullifier is deliberately not stored in the (publicly readable) profile, so support must read `worldId_nullifiers` with the Admin SDK rather than asking the user for it.
+
+## World ID: probar sin un Orb físico (simulador)
+
+### Problem
+No tienes un Orb y quieres probar el flujo de World ID de extremo a extremo.
+
+### Cause
+El simulador de World ID emite proofs del entorno `staging`, que **no** representan a una persona real.
+
+### Solution
+1. Añade `WORLD_ID_ENVIRONMENT=staging` en el entorno local (y en Vercel solo si es un despliegue de pruebas descartable).
+2. El servidor publica `environment` en `/api/worldid/rp-context` y el cliente lo usa tal cual: no está fijado en el código.
+3. El servidor rechaza con `WORLDID_ENVIRONMENT_MISMATCH` cualquier proof cuyo entorno no coincida con el suyo, así que un simulator no puede colarse como humano en producción.
+4. **No dejes `staging` en producción**: quien tenga el simulador podría marcarse como verificado.
+
+## El registro de usuario falla con `PERMISSION_DENIED`
+
+### Problem
+Tras desplegar las reglas nuevas, crear una cuenta devuelve `PERMISSION_DENIED`.
+
+### Cause
+`users/<uid>` depende de varias reglas `.validate`. Si el perfil se crea con un campo que el servidor considera exclusivo suyo (por ejemplo `paymentDate`, `referredBy` o un `referralCodeUsed` distinto de `false`), el alta se rechaza.
+
+### Solution
+Los campos inicializadores que el cliente sí puede escribir en el alta están permitidos explícitamente: `role` (solo los cuatro roles no privilegiados), `status` (`active` / `pending_verification` / `pending_payment`) y `referralCodeUsed: false`. Cualquier otro valor es de solo servidor (Admin SDK, que ignora las reglas). Si un flujo legítimo nuevo necesita escribir otro campo, añádelo como rama de creación en su `.validate` y con un test en `scripts/test-booking-rules.mjs`.

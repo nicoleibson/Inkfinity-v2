@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signRequest } from '@worldcoin/idkit-core/signing';
 import { requireAuth } from '@/lib/server/auth';
-import { WORLD_ID_ACTION, getWorldIdRpId, getWorldIdSigningKey } from '@/lib/server/worldid';
+import {
+  WORLD_ID_ACTION,
+  getWorldIdEnvironment,
+  getWorldIdRpId,
+  getWorldIdSigningKey,
+} from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +45,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       created_at: createdAt,
       expires_at: expiresAt,
       signature: sig,
+      environment: getWorldIdEnvironment(),
     });
   } catch {
     return NextResponse.json(

@@ -29,6 +29,7 @@ type ProofResponse = {
 type IdkitResult = {
   protocol_version?: string;
   action?: string;
+  environment?: string;
   responses?: ProofResponse[];
 };
 
@@ -69,6 +70,20 @@ export function isWorldIdConfigured(): boolean {
 }
 
 /**
+ * Which World ID environment this deployment accepts.
+ *
+ * `staging` engages the simulator, which issues proofs that do NOT represent a
+ * real human. That is fine for local testing and dangerous in production, so the
+ * server — not the browser — is the authority: it tells the client which
+ * environment to use and then rejects any proof whose environment disagrees.
+ * Defaulting to `production` means an unset variable fails safe.
+ */
+export function getWorldIdEnvironment(): 'production' | 'staging' {
+  const value = (process.env.WORLD_ID_ENVIRONMENT || process.env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT || '').trim();
+  return value === 'staging' ? 'staging' : 'production';
+}
+
+/**
  * Normalizes a nullifier to a canonical, comparable form.
  *
  * The docs warn that casing/parsing differences around 256-bit nullifiers are a
@@ -106,6 +121,18 @@ export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<Wo
 
   if (!idkitResponse || typeof idkitResponse !== 'object' || !Array.isArray(idkitResponse.responses)) {
     return { ok: false, status: 400, error: 'Malformed IDKit result.' };
+  }
+
+  // Reject simulator proofs on a production deployment (and vice versa) before
+  // spending a verifier call. The cloud verifier is still the final authority.
+  const expectedEnvironment = getWorldIdEnvironment();
+  const claimedEnvironment = typeof idkitResponse.environment === 'string' ? idkitResponse.environment : null;
+  if (claimedEnvironment && claimedEnvironment !== expectedEnvironment) {
+    return {
+      ok: false,
+      status: 400,
+      error: `WORLDID_ENVIRONMENT_MISMATCH (proof: ${claimedEnvironment}, server: ${expectedEnvironment})`,
+    };
   }
 
   let response: Response;

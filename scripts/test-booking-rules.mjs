@@ -31,7 +31,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
       super1: { role: 'Super-Administrator' },
       client1: { myBookings: {} },
       artist1: {},
-      client2: {},
+      client2: { role: 'Client' },
     },
     bookings: {
       b_paid: {
@@ -62,6 +62,7 @@ async function check(name, expected, fn) {
 }
 
 const root = (uid) => ref(env.authenticatedContext(uid).database());
+const fresh = (uid) => ref(env.authenticatedContext(uid).database()); // uid sin perfil previo
 const guest = () => ref(env.unauthenticatedContext().database());
 const HASH = '0x' + 'a'.repeat(64);
 
@@ -184,6 +185,96 @@ await check('anónimo NO lee el índice de nullifiers', 'deny', () =>
 
 await check('cliente autenticado NO lee el índice de nullifiers', 'deny', () =>
   get(root('client1'), '/worldId_nullifiers'));
+
+// --- Escalada de privilegios vía `users/<uid>` ---
+// `users/<uid>` concede `.write` al dueño, y en Realtime Database los permisos
+// heredan hacia abajo SIN PODER REVOCARSE: un `.write` admin-only en un hijo no
+// impedía nada. Estos campos exigían `.validate`, que sí se evalúa.
+await check('dueño NO se auto-nombra Administrator', 'deny', () =>
+  update(root('client1'), { '/users/client1/role': 'Administrator' }));
+
+await check('dueño NO se auto-nombra Super-Administrator', 'deny', () =>
+  update(root('client1'), { '/users/client1/role': 'Super-Administrator' }));
+
+await check('dueño NO cambia un role ya establecido', 'deny', () =>
+  update(root('client2'), { '/users/client2/role': 'Studio' }));
+
+await check('dueño NO se activa a sí mismo (status=active)', 'deny', () =>
+  update(root('client1'), { '/users/client1/status': 'active' }));
+
+// Bypass del gate de pago: al no evaluarse .validate en borrados, un usuario
+// podría borrar su status y volver a escribirlo como 'active'. La regla del
+// nodo padre (`users/$uid`) cierra esa transición.
+await check('dueño NO borra status y lo reescribe como active', 'deny', async () => {
+  await update(root('client2'), { '/users/client2/status': null });
+  await update(root('client2'), { '/users/client2/status': 'active' });
+});
+
+await check('dueño NO se marca a sí mismo como suspendido', 'deny', () =>
+  update(root('client1'), { '/users/client1/status': 'suspended' }));
+
+await check('dueño NO falsifica su paymentDate', 'deny', () =>
+  update(root('client1'), { '/users/client1/paymentDate': '2026-01-01T00:00:00.000Z' }));
+
+await check('dueño NO falsifica su paymentTxHash', 'deny', () =>
+  update(root('client1'), { '/users/client1/paymentTxHash': '0xdead' }));
+
+// `verify-payment` paga comissão usando estos campos; el propio código asume que
+// solo el servidor los escribe. Sin .validate el dueño podía forzar comisiones.
+await check('dueño NO se auto-asigna referredBy', 'deny', () =>
+  update(root('client1'), { '/users/client1/referredBy': 'admin1' }));
+
+await check('dueño NO se auto-asigna referralCodeUsed', 'deny', () =>
+  update(root('client1'), { '/users/client1/referralCodeUsed': 'CODE' }));
+
+await check('dueño NO se auto-asigna referralEarnings', 'deny', () =>
+  update(root('client1'), { '/users/client1/referralEarnings/2026-W40/commissionWei': '1' }));
+
+// --- Flujos legítimos que NO deben romperse ---
+// El registro crea el perfil con role + status: se permite solo en la creación y
+// solo con valores no privilegiados.
+await check('dueño fija su role por 1ª vez (signup, no privilegiado)', 'allow', () =>
+  update(root('client1'), { '/users/client1/role': 'Tattoo Artist' }));
+
+// El flujo real de signup escribe el perfil entero de una vez (role + status
+// + legal + contadores). Es el camino que NO debe romperse.
+await check('signup crea perfil completo (role Tattoo Artist + status active)', 'allow', () =>
+  update(fresh('newbie1'), {
+    '/users/newbie1': {
+      role: 'Tattoo Artist', status: 'active', name: 'Nuevo Artista', username: 'nuevoartista',
+      email: 'nuevo@example.com', points: 0, followersCount: 0, followingCount: 0,
+      artworksCount: 0, collectionCount: 0, twoFactorEnabled: false, storageUsed: 0,
+      artistRequestStatus: 'none', referralCodeUsed: false, onboardingComplete: false,
+      legal: { globalTerms: true, acceptedAt: '2026-01-01T00:00:00.000Z' },
+    },
+  }));
+
+await check('signup crea perfil completo (role Studio + status pending_payment)', 'allow', () =>
+  update(fresh('newbie2'), {
+    '/users/newbie2': {
+      role: 'Studio', status: 'pending_payment', name: 'Nuevo Studio', username: 'nuevostudio',
+      email: 'studio@example.com', points: 0, followersCount: 0, followingCount: 0,
+      artworksCount: 0, collectionCount: 0, twoFactorEnabled: false, storageUsed: 0,
+      artistRequestStatus: 'none', referralCodeUsed: false, onboardingComplete: false,
+    },
+  }));
+
+await check('dueño NO escribe el perfil de otro usuario', 'deny', () =>
+  update(root('client1'), { '/users/client2': { role: 'Studio', status: 'active' } }));
+
+// Un trial de artista caducado pasa a pending_payment: lo escribe el propio
+// cliente en el login, así que debe seguir permitido.
+await check('dueño marca su propio status=pending_payment', 'allow', () =>
+  update(root('client1'), { '/users/client1/status': 'pending_payment' }));
+
+await check('admin SÍ cambia el status de otro usuario', 'allow', () =>
+  update(root('admin1'), { '/users/client1/status': 'suspended' }));
+
+await check('admin SÍ promueve a otro usuario', 'allow', () =>
+  update(root('admin1'), { '/users/client1/role': 'Administrator' }));
+
+await check('admin SÍ marca el pago de otro usuario', 'allow', () =>
+  update(root('admin1'), { '/users/client1/paymentDate': '2026-01-01T00:00:00.000Z' }));
 
 await env.cleanup();
 
