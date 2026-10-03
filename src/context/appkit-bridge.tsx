@@ -43,7 +43,11 @@ function ensureAppKit() {
         url: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-ten.vercel.app",
         icons: [],
       },
-      networks: [polygon, polygonAmoy, worldchain, worldchainSepolia],
+      // WorldChain first on purpose: AppKit treats the first entry as the active
+      // network, and the wallet list in the modal is filtered by the active chain.
+      // With any other chain first, the picker offered Polygon wallets and World
+      // Chain users had to switch networks before seeing a relevant list.
+      networks: [worldchain, polygon, worldchainSepolia, polygonAmoy],
       projectId,
       features: {
         analytics: false,
@@ -76,7 +80,9 @@ export function AppKitBridge({
 
   const switchNetworkByName = useCallback(
     async (networkName: string) => {
-      const net = SUPPORTED_APPKIT_NETWORKS[networkName || "amoy"];
+      // WorldChain is the product's chain, so it is also the fallback when no
+      // platform setting has been read yet — never a testnet.
+      const net = SUPPORTED_APPKIT_NETWORKS[networkName || "worldchain"];
       if (net) {
         try {
           await switchNetwork(net);

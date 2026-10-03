@@ -22,6 +22,7 @@ import type { UserProfile } from '@/types/user';
 import { get, ref, update, onValue } from 'firebase/database';
 import { requestCamera, cameraErrorTitle, cameraErrorDescription } from '@/lib/client/camera';
 import type { CameraDiagnostics } from '@/lib/client/camera';
+import WorldIdVerification from './world-id-verification';
 
 const FACE_CONFIDENCE_THRESHOLD = 0.8;
 import { getVerificationLock, registerVerificationFailure, resetVerificationFailures, formatRetryTime } from '@/lib/face-lock';
@@ -1153,6 +1154,11 @@ export default function SettingsPage() {
                     </div>
                   </div>
               </Card>
+
+              <WorldIdVerification
+                verified={profile.worldIdVerified}
+                verifiedAt={profile.worldIdVerifiedAt}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>

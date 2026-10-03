@@ -243,7 +243,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
     const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
 
-    const network = settings?.network || 'worldchainSepolia';
+    const network = settings?.network || 'worldchain';
     const targetChain = chainParams[network];
 
     try {
@@ -342,7 +342,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         setWalletAddress(nextAddress);
         setProvider(new BrowserProvider(nextProvider));
 
-        const networkName = settings?.network || 'worldchainSepolia';
+        const networkName = settings?.network || 'worldchain';
         appkitSwitchNetworkRef.current?.(networkName).catch(() => {});
 
         if (!wasConnected) {

@@ -73,5 +73,5 @@ If you have any questions about these Terms, please contact us through the Help 
 
 Como agradecimiento a nuestros primeros seguidores y para celebrar nuestro futuro lanzamiento, nos complace ofrecer una promoción especial: todas las cuentas que se encuentren con su membresía o pago de registro al día en el momento del lanzamiento oficial recibirán una membresía extendida de 1 año sin costo adicional.
 
-Esta promoción es válida para todas las activaciones y renovaciones realizadas hasta diciembre de 2026.
+Esta promoción es válida para todas las activaciones y renovaciones realizadas hasta diciembre de 2027.
 

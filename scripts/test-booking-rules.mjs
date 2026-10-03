@@ -159,6 +159,32 @@ await check('anónimo NO lee los claims de pago', 'deny', () =>
 await check('cliente autenticado NO lee los claims de pago', 'deny', () =>
   get(root('client1'), '/payment_claims'));
 
+// --- World ID: el servidor es la única fuente de verdad ---
+// La verificación de World ID corre íntegramente en el servidor con el Admin SDK
+// (que ignora las reglas). Si el dueño de la cuenta pudiera escribirse a sí mismo
+// `worldIdVerified`, se auto-verificaría sin proof, y el índice de nullifiers es
+// justamente lo que impide registrar un World ID en dos cuentas.
+await check('cliente NO se auto-verifica World ID', 'deny', () =>
+  update(root('client1'), { '/users/client1/worldIdVerified': true }));
+
+await check('artista NO se auto-verifica World ID', 'deny', () =>
+  update(root('artist1'), { '/users/artist1/worldIdVerified': true }));
+
+await check('cliente NO falsifica la fecha de verificación', 'deny', () =>
+  update(root('client1'), { '/users/client1/worldIdVerifiedAt': '2026-01-01T00:00:00.000Z' }));
+
+await check('admin SÍ marca World ID como verificado', 'allow', () =>
+  update(root('admin1'), { '/users/client1/worldIdVerified': true }));
+
+await check('cliente NO registra un nullifier', 'deny', () =>
+  update(root('client1'), { '/worldId_nullifiers/0xabc': { uid: 'client1' } }));
+
+await check('anónimo NO lee el índice de nullifiers', 'deny', () =>
+  get(guest(), '/worldId_nullifiers'));
+
+await check('cliente autenticado NO lee el índice de nullifiers', 'deny', () =>
+  get(root('client1'), '/worldId_nullifiers'));
+
 await env.cleanup();
 
 console.log(`\n${pass}/${pass + failures.length} assertions OK`);

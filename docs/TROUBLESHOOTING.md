@@ -194,3 +194,33 @@ El estado ya no lo escribe el cliente: `/api/verify-booking-payment` lo cambia s
 1. Despliega las reglas: `firebase deploy --only database --project inkfinity-2d470` (ver `docs/DEPLOYMENT.md` §5.2). Las reglas nuevas bloquean los campos de pago y el paso a `confirmed` desde el navegador.
 2. Comprueba la respuesta del endpoint en la consola del navegador: si es `422 INSUFFICIENT_VALUE`, el importe enviado quedó por debajo del mínimo tolerado (10% de margen sobre el precio de referencia). Si es `503 PRICE_UNAVAILABLE`, falta `PRICE_API_BASE_URL`.
 3. Verifica que el `depositAmount` de la reserva no se haya modificado: las reglas ya no permiten bajarlo.
+
+## World ID: `WORLDID_UNAVAILABLE`
+
+### Problem
+"Verify with World ID" always fails with `WORLDID_UNAVAILABLE`, or the button reports that verification is temporarily unavailable.
+
+### Cause
+One of:
+- `RP_SIGNING_KEY` is not set in the deployment. World ID 4.0 rejects unsigned requests, so the flow cannot be downgraded to unsigned.
+- `WORLD_RP_ID` is missing or does not start with `rp_` (it is rejected by `getWorldIdRpId`).
+- `NEXT_PUBLIC_WORLD_APP_ID` is missing or does not start with `app_`; the client refuses before contacting IDKit.
+- World ID's verifier was unreachable, timed out (20s), returned `404` (app not found or not yet migrated to 4.0), `429`, or a `5xx`.
+
+### Solution
+This error is deliberately **not** a rejection: it means the app could not check, so it fails closed instead of marking a real person as a bot. Check, in order:
+1. `RP_SIGNING_KEY` and `WORLD_RP_ID` exist in Vercel (both server-side) and `NEXT_PUBLIC_WORLD_APP_ID` is a public build-time value.
+2. In the World Developer Portal, confirm the app has completed **Enable World ID 4.0** (RP registration). Until then the verifier answers `app_not_migrated` with `404`.
+3. The `signing_key` shown in the Portal is the one configured in `RP_SIGNING_KEY`; if it ever leaked, rotate it there — clients must never hold it.
+4. Retry. Nothing is persisted on failure, so a successful retry links normally.
+
+## World ID: `409` "already linked to another account"
+
+### Problem
+Linking returns `409` even though the person believes they never verified before.
+
+### Cause
+`worldId_nullifiers/<nullifier>` is already claimed by a different Firebase uid. The claim is keyed by the (app, action) nullifier, so it is stable per human for the `inkfinity-account` action: verifying again with the same account is fine, but the same World ID cannot be attached to two accounts.
+
+### Solution
+Sign in with the original account. If the original account is inaccessible, this needs a manual review: the raw nullifier is deliberately not stored in the (publicly readable) profile, so support must read `worldId_nullifiers` with the Admin SDK rather than asking the user for it.

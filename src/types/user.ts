@@ -85,6 +85,10 @@ export interface UserProfile {
     referralCodeUsed?: boolean; // True if they've ever used a referral code
     referral?: Referral; // Added for enriching user data for admin view
     paymentDate?: string; // ISO string of when payment was made
+    // World ID (proof of humanity). Written only by the server after a verified
+    // proof; the raw nullifier never lives in the (publicly readable) profile.
+    worldIdVerified?: boolean;
+    worldIdVerifiedAt?: string;
     // Legal
     legal?: {
         globalTerms: boolean;
