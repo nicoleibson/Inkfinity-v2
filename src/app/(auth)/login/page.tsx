@@ -25,7 +25,27 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Helper to create session cookie after successful auth
+  const createSessionCookie = async (user: any) => {
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!response.ok) {
+        console.error('Failed to create session cookie');
+      }
+    } catch (err) {
+      console.error('Failed to create session cookie:', err);
+    }
+  };
+
   const completeLogin = async (user: any) => {
+    // Create session cookie for middleware
+    await createSessionCookie(user);
+
     // Check user profile for status and 2FA
     const userRef = ref(database, `users/${user.uid}`);
     const snapshot = await get(userRef);

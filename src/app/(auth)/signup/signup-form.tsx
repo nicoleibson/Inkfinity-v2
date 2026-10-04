@@ -38,6 +38,23 @@ export default function SignupForm() {
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const verificationCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // Helper to create session cookie after successful auth
+  const createSessionCookie = async (user: any) => {
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!response.ok) {
+        console.error('Failed to create session cookie');
+      }
+    } catch (err) {
+      console.error('Failed to create session cookie:', err);
+    }
+  };
   
   useEffect(() => {
     // Check auth state on initial load
@@ -119,6 +136,7 @@ export default function SignupForm() {
 
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        await createSessionCookie(userCredential.user);
         await sendEmailVerification(userCredential.user);
         toast({ title: "Verification Email Sent", description: `A verification link has been sent to ${formData.email}. Please check your inbox.` });
         setStep(2); // Move to verification waiting step
@@ -150,6 +168,7 @@ export default function SignupForm() {
       provider.addScope('email');
       provider.addScope('profile');
       const result = await signInWithPopup(auth, provider);
+      await createSessionCookie(result.user);
       const user = result.user;
       // For Google signup, we skip email verification and go straight to profile setup
       setFormData(prev => ({ ...prev, email: user.email! }));
@@ -214,6 +233,7 @@ export default function SignupForm() {
 
       const { customToken } = await signupResponse.json();
       await signInWithCustomToken(auth, customToken);
+      await createSessionCookie(auth.currentUser!);
 
       // After sign-in, go to step 4 (bio/avatar) since profile basics are already set
       setStep(4);
