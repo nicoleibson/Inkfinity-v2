@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud } from 'lucide-react';
+import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { verifyFace } from '@/ai/flows/verify-face-flow';
@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const [cameraRetryKey, setCameraRetryKey] = React.useState(0);
   const [isProcessingFace, setIsProcessingFace] = React.useState(false);
   const [verificationResult, setVerificationResult] = React.useState<VerifyFaceOutput | null>(null);
+  const [showCameraRegister, setShowCameraRegister] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
@@ -1175,45 +1176,105 @@ export default function SettingsPage() {
                     </div>
                     <Switch checked={profile.twoFactorEnabled || false} onCheckedChange={handle2FAToggle} disabled={loadingProfile}/>
                   </div>
-                  {profile.twoFactorEnabled && (
+{profile.twoFactorEnabled && (
                     <div className="mt-4 space-y-4 border-t pt-4">
-                      {hasCameraPermission === false && (
-                        <Alert variant="destructive">
-                          <Camera className="h-4 w-4" />
-                          <AlertTitle>{cameraError ? cameraErrorTitle(cameraError.error) : 'Camera Access Required'}</AlertTitle>
-                          <AlertDescription className="flex flex-col gap-2">
-                            {cameraError ? cameraErrorDescription(cameraError.error) : 'Please allow camera access in your browser to use this feature.'}
-                            <Button onClick={() => setCameraRetryKey(k => k + 1)} variant="outline" size="sm" className="self-start">
-                              Try Again
+                      {profile.facialScanUrl ? (
+                        // Face already registered - show thumbnail and re-register option
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-medium">Registered Face</h4>
+                              <p className="text-sm text-muted-foreground">Your face is registered for 2FA verification.</p>
+                            </div>
+                            <Button variant="outline" onClick={() => setShowCameraRegister(true)} disabled={isProcessingFace}>
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Re-register Face
                             </Button>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      <div className="relative aspect-video w-full max-w-sm mx-auto bg-muted rounded-md overflow-hidden">
-                        <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                        <canvas ref={canvasRef} className="hidden" />
-                      
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button onClick={() => captureAndProcessFace('register')} disabled={!hasCameraPermission || isProcessingFace} className="w-full">
-                          {isProcessingFace ? <Loader2 className="animate-spin" /> : <UserCheck />}
-                          {isProcessingFace ? 'Registering...' : (profile.facialScanUrl ? 'Re-register Face' : 'Register Face')}
-                        </Button>
-                        <Button onClick={() => captureAndProcessFace('verify')} disabled={!hasCameraPermission || isProcessingFace || !profile.facialScanUrl} className="w-full" variant="secondary">
-                          {isProcessingFace ? <Loader2 className="animate-spin" /> : <Camera />}
-                          {isProcessingFace ? "Verifying..." : "Verify Identity"}
-                        </Button>
-                      </div>
-
-                      {verificationResult && (
-                        <Alert variant={verificationResult.isMatch ? "default" : "destructive"} className="flex items-center gap-4">
-                           {verificationResult.isMatch ? <ShieldCheck className="h-5 w-5 text-green-500" /> : <ShieldX className="h-5 w-5 text-red-500" />}
-                          <div>
-                            <AlertTitle>{verificationResult.isMatch ? "Verification Successful" : "Verification Failed"}</AlertTitle>
-                            <AlertDescription>{verificationResult.reason} (confidence {Math.round((verificationResult.confidence ?? 0) * 100)}%).</AlertDescription>
                           </div>
-                        </Alert>
+                          
+                          {showCameraRegister && (
+                            <div className="space-y-4 border-t pt-4 animate-in">
+                              {hasCameraPermission === false && (
+                                <Alert variant="destructive">
+                                  <Camera className="h-4 w-4" />
+                                  <AlertTitle>{cameraError ? cameraErrorTitle(cameraError.error) : 'Camera Access Required'}</AlertTitle>
+                                  <AlertDescription className="flex flex-col gap-2">
+                                    {cameraError ? cameraErrorDescription(cameraError.error) : 'Please allow camera access in your browser to use this feature.'}
+                                    <Button onClick={() => setCameraRetryKey(k => k + 1)} variant="outline" size="sm" className="self-start">
+                                      Try Again
+                                    </Button>
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+                              <div className="relative aspect-video w-full max-w-sm mx-auto bg-muted rounded-md overflow-hidden">
+                                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                                <canvas ref={canvasRef} className="hidden" />
+                              </div>
+                              
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <Button onClick={() => captureAndProcessFace('register')} disabled={!hasCameraPermission || isProcessingFace} className="w-full">
+                                  {isProcessingFace ? <Loader2 className="animate-spin" /> : <UserCheck />}
+                                  {isProcessingFace ? 'Registering...' : 'Re-register Face'}
+                                </Button>
+                                <Button variant="outline" onClick={() => setShowCameraRegister(false)} disabled={isProcessingFace}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Show registered face thumbnail */}
+                          <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-muted border border-border/50 flex-shrink-0">
+                              <img 
+                                src={profile.facialScanUrl} 
+                                alt="Registered face" 
+                                className="w-full h-full object-cover" 
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium">Face registered for 2FA</p>
+                              <p className="text-sm text-muted-foreground truncate">This image will be used for facial verification during login.</p>
+                            </div>
+                          </div>
+                          
+                          {verificationResult && (
+                            <Alert variant={verificationResult.isMatch ? "default" : "destructive"} className="flex items-center gap-4">
+                              {verificationResult.isMatch ? <ShieldCheck className="h-5 w-5 text-green-500" /> : <ShieldX className="h-5 w-5 text-red-500" />}
+                              <div>
+                                <AlertTitle>{verificationResult.isMatch ? "Verification Successful" : "Verification Failed"}</AlertTitle>
+                                <AlertDescription>{verificationResult.reason} (confidence {Math.round((verificationResult.confidence ?? 0) * 100)}%).</AlertDescription>
+                              </div>
+                            </Alert>
+                          )}
+                        </div>
+                      ) : (
+                        // Face not registered yet - show camera and register button
+                        <div className="space-y-4">
+                          {hasCameraPermission === false && (
+                            <Alert variant="destructive">
+                              <Camera className="h-4 w-4" />
+                              <AlertTitle>{cameraError ? cameraErrorTitle(cameraError.error) : 'Camera Access Required'}</AlertTitle>
+                              <AlertDescription className="flex flex-col gap-2">
+                                {cameraError ? cameraErrorDescription(cameraError.error) : 'Please allow camera access in your browser to use this feature.'}
+                                <Button onClick={() => setCameraRetryKey(k => k + 1)} variant="outline" size="sm" className="self-start">
+                                  Try Again
+                                </Button>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          <div className="relative aspect-video w-full max-w-sm mx-auto bg-muted rounded-md overflow-hidden">
+                            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                            <canvas ref={canvasRef} className="hidden" />
+                          </div>
+                          
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button onClick={() => captureAndProcessFace('register')} disabled={!hasCameraPermission || isProcessingFace} className="w-full">
+                              {isProcessingFace ? <Loader2 className="animate-spin" /> : <UserCheck />}
+                              {isProcessingFace ? 'Registering...' : 'Register Face'}
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}

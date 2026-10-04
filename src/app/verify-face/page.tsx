@@ -2,18 +2,23 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { auth } from '@/lib/firebase-config';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { FaceVerifier } from '@/components/auth/face-verifier';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Suspense } from 'react';
 
-export default function VerifyFacePage() {
+function VerifyFaceContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const redirect = searchParams.get('redirect') || '/';
+  const expired = searchParams.get('expired') === 'true';
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -28,7 +33,11 @@ export default function VerifyFacePage() {
   }, [router]);
 
   const onVerificationSuccess = () => {
-    router.push('/');
+    auth.currentUser?.getIdToken(true).then(() => {
+      router.push(redirect);
+    }).catch(() => {
+      router.push(redirect);
+    });
   };
 
   const handleLogout = async () => {
@@ -36,12 +45,16 @@ export default function VerifyFacePage() {
     router.push('/login');
   };
 
-  if (loading || !isAuthenticated) {
+  if (loading) {
     return (
       <div className="flex min-h-screen flex-1 flex-col justify-center items-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (
@@ -50,7 +63,9 @@ export default function VerifyFacePage() {
             <CardHeader>
                 <CardTitle className="font-headline text-2xl">Verify Your Identity</CardTitle>
                 <CardDescription>
-                    For enhanced security, please complete this facial scan to continue.
+                    {expired 
+                      ? 'Your facial verification has expired. Please verify again to continue.' 
+                      : 'For enhanced security, please complete this facial scan to continue.'}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -63,5 +78,17 @@ export default function VerifyFacePage() {
             </CardFooter>
         </Card>
     </div>
+  );
+}
+
+export default function VerifyFacePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-1 flex-col justify-center items-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    }>
+      <VerifyFaceContent />
+    </Suspense>
   );
 }

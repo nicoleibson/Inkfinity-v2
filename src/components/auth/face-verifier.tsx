@@ -165,6 +165,15 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
                 title: 'Verification Successful',
                 description: `${result.reason} (confidence ${confidencePercent}%).`,
             });
+            // Record face verification in custom claims
+            try {
+              await fetch('/api/auth/face-verified', {
+                method: 'POST',
+                credentials: 'include',
+              });
+            } catch (e) {
+              console.warn('Failed to record face verification claim:', e);
+            }
             onVerificationSuccess();
         } else {
             await registerVerificationFailure(uid);
