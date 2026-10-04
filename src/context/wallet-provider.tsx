@@ -181,269 +181,47 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const connectWallet = async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
-        toast({ variant: "destructive", title: "Not Logged In", description: "You must be logged in to connect a wallet." });
-        return;
+      toast({ variant: "destructive", title: "Not Logged In", description: "You must be logged in to connect a wallet." });
+      return;
     }
-
-    // Inside World App: connect via the native MiniKit bridge (SIWE).
+    if (!isInWorldApp()) {
+      toast({ variant: "destructive", title: "World App Required", description: "Open this app inside the World App to connect your World Wallet and pay in WLD." });
+      return;
+    }
     ensureMiniKitInstalled();
     const worldAppProvider = getWorldAppProviderOrNull();
-    if (worldAppProvider) {
-      try {
-        const browserProvider = new BrowserProvider(worldAppProvider);
-        const accounts = (await browserProvider.send("eth_requestAccounts", [])) as string[];
-        if (accounts.length > 0) {
-          const newAddress = accounts[0];
-          const { ok, inUse } = await linkWalletToAccount(newAddress);
-          if (!ok) {
-            toast({
-              variant: "destructive",
-              title: inUse ? "Wallet In Use" : "Wallet Connection Failed",
-              description: inUse ? "This wallet address is already linked to another account." : "Could not link the wallet to your profile. Please try again.",
-            });
-            return;
-          }
-          setWalletAddress(newAddress);
-          setProvider(browserProvider);
-          toast({
-            title: "Wallet Connected & Saved",
-            description: `Address ${newAddress.slice(0,6)}...${newAddress.slice(-4)} is now linked to your profile.`,
-          });
-        }
-      } catch (error) {
-        console.error("Error connecting via World App:", error);
-        toast({
-          variant: "destructive",
-          title: "Wallet Connection Failed",
-          description: "Could not connect to the World App wallet. Please try again.",
-        });
-      }
+    if (!worldAppProvider) {
+      toast({ variant: "destructive", title: "World App Required", description: "Open this app inside the World App to connect your World Wallet and pay in WLD." });
       return;
     }
-
-    if (appkitEnabled && appkitOpenRef.current) {
-        appkitOpenRef.current();
-        return;
-    }
-
-    if (!window.ethereum) {
-      if (appkitEnabled) {
-        toast({
-          title: "Wallet Service Starting",
-          description: "Connecting to wallet service, please wait a moment and try again...",
-        });
-        return;
-      }
-      toast({
-        variant: "destructive",
-        title: "MetaMask Not Found",
-        description: "Please install the MetaMask extension to connect your wallet.",
-      });
-      return;
-    }
-    const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
-
-    const network = settings?.network || 'worldchain';
-    const targetChain = chainParams[network];
-
     try {
-      await injectedProvider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: targetChain.chainId }],
-      });
-    } catch (switchError: any) {
-      if (switchError.code === 4902) {
-        try {
-          await injectedProvider.request({
-            method: 'wallet_addEthereumChain',
-            params: [targetChain],
-          });
-        } catch (addError) {
-          console.error("Failed to add the chain:", addError);
-          toast({ variant: 'destructive', title: 'Network Error', description: `Could not add the ${targetChain.chainName} network to your wallet.`});
+      const browserProvider = new BrowserProvider(worldAppProvider);
+      const accounts = (await browserProvider.send("eth_requestAccounts", [])) as string[];
+      if (accounts.length > 0) {
+        const newAddress = accounts[0];
+        const { ok, inUse } = await linkWalletToAccount(newAddress);
+        if (!ok) {
+          toast({ variant: "destructive", title: inUse ? "Wallet In Use" : "Wallet Connection Failed", description: inUse ? "This wallet address is already linked to another account." : "Could not link the wallet to your profile. Please try again." });
           return;
         }
-      } else {
-        console.error("Failed to switch the chain:", switchError);
-        toast({ variant: 'destructive', title: 'Network Error', description: `Could not switch to the ${targetChain.chainName} network. Please do it manually in MetaMask.`});
-        return;
+        setWalletAddress(newAddress);
+        setProvider(browserProvider);
+        toast({ title: "Wallet Connected & Saved", description: `Address ${newAddress.slice(0,6)}...${newAddress.slice(-4)} is now linked to your profile.` });
       }
-    }
-
-    try {
-        const browserProvider = new BrowserProvider(injectedProvider);
-        const accounts = await browserProvider.send("eth_requestAccounts", []);
-
-        if (accounts.length > 0) {
-            const newAddress = accounts[0];
-            const { ok, inUse } = await linkWalletToAccount(newAddress);
-
-            if (!ok) {
-                toast({
-                    variant: "destructive",
-                    title: inUse ? "Wallet In Use" : "Wallet Connection Failed",
-                    description: inUse ? "This wallet address is already linked to another account." : "Could not link the wallet to your profile. Please try again.",
-                });
-                return;
-            }
-
-            setWalletAddress(newAddress);
-            setProvider(browserProvider);
-
-            toast({
-                title: "Wallet Connected & Saved",
-                description: `Address ${newAddress.slice(0,6)}...${newAddress.slice(-4)} is now linked to your profile.`,
-            });
-        }
     } catch (error) {
-        console.error("Error connecting/syncing wallet:", error);
-        toast({
-            variant: "destructive",
-            title: "Wallet Connection Failed",
-            description: "Could not connect to the wallet. Please try again.",
-        });
+      console.error("Error connecting via World App:", error);
+      toast({ variant: "destructive", title: "Wallet Connection Failed", description: "Could not connect to the World App wallet. Please try again." });
     }
   }
 
-  useEffect(() => {
-    if (!appkitEnabled) return;
-
-    const wasConnected = appkitConnectedRef.current;
-    appkitConnectedRef.current = appkitState.isConnected;
-
-    if (!appkitState.isConnected || !appkitState.address || !appkitState.walletProvider) {
-        if (wasConnected && walletAddress) {
-            setWalletAddress(null);
-            setProvider(null);
-        }
-        return;
-    }
-
-    const nextAddress = appkitState.address;
-    const nextProvider = appkitState.walletProvider;
-
-    if (walletAddress && walletAddress.toLowerCase() === nextAddress.toLowerCase()) {
-        return;
-    }
-
-    linkWalletToAccount(nextAddress)
-      .then(({ ok, inUse }) => {
-        if (!ok) {
-            toast({
-                variant: "destructive",
-                title: inUse ? "Wallet In Use" : "Wallet Connection Failed",
-                description: inUse ? "This wallet address is already linked to another account." : "Could not link the wallet to your profile. Please try again.",
-            });
-            appkitDisconnectRef.current?.();
-            setWalletAddress(null);
-            setProvider(null);
-            return;
-        }
-        setWalletAddress(nextAddress);
-        setProvider(new BrowserProvider(nextProvider));
-
-        const networkName = settings?.network || 'worldchain';
-        appkitSwitchNetworkRef.current?.(networkName).catch(() => {});
-
-        if (!wasConnected) {
-            toast({
-                title: "Wallet Connected & Saved",
-                description: `Address ${nextAddress.slice(0,6)}...${nextAddress.slice(-4)} is now linked to your profile.`,
-            });
-        }
-      })
-      .catch((error) => {
-        console.error("Error syncing AppKit wallet:", error);
-        toast({
-            variant: "destructive",
-            title: "Wallet Connection Failed",
-            description: "Could not connect to the wallet. Please try again.",
-        });
-      });
-  }, [appkitState, walletAddress, settings, toast]);
-
-  const handleAccountsChanged = useCallback((accounts: string[]) => {
-    if (walletAddress) {
-        if (accounts.length === 0) {
-            toast({ title: "Wallet Disconnected", description: "Your wallet has been disconnected from the site."});
-            setWalletAddress(null);
-            setProvider(null);
-        } else if (accounts[0].toLowerCase() !== walletAddress.toLowerCase()) {
-            toast({ title: "Wallet Account Changed", description: "Your active wallet account has changed. Please reconnect if you wish."});
-            setWalletAddress(null);
-            setProvider(null);
-        }
-    }
-  }, [walletAddress, toast]);
-
-  useEffect(() => {
-    if (appkitEnabled) return;
-
-    const checkConnection = async () => {
-        const user = auth.currentUser;
-        if (user && settings && window.ethereum) {
-            const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
-            const userRef = ref(database, `users/${user.uid}`);
-            const snapshot = await get(userRef);
-            if (snapshot.exists() && snapshot.val().walletAddress) {
-                const savedAddress = snapshot.val().walletAddress;
-
-                try {
-                    const provider = new BrowserProvider(injectedProvider);
-                    const network = await provider.getNetwork();
-                    const accounts = await provider.listAccounts();
-
-                    const targetChainId = parseInt(chainParams[settings.network].chainId, 16);
-
-                    if (accounts.length > 0 && accounts[0].address.toLowerCase() === savedAddress.toLowerCase() && network.chainId === BigInt(targetChainId)) {
-                        setWalletAddress(savedAddress);
-                        setProvider(provider);
-                    } else {
-                        setWalletAddress(null);
-                        setProvider(null);
-                    }
-                } catch (e) {
-                     setWalletAddress(null);
-                     setProvider(null);
-                }
-            }
-        }
-    };
-
-    checkConnection();
-
-    const unsubscribeAuth = onAuthStateChanged(auth, checkConnection);
-
-    const handleChainChanged = () => {
-      window.location.reload();
-    };
-
-    if(window.ethereum) {
-        const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
-        injectedProvider.on('chainChanged', handleChainChanged);
-        injectedProvider.on('accountsChanged', (accounts) => handleAccountsChanged(accounts as string[]));
-    }
-
-    return () => {
-        unsubscribeAuth();
-        if(window.ethereum) {
-            const injectedProvider = window.ethereum as unknown as InjectedEip1193Provider;
-            injectedProvider.removeListener('chainChanged', handleChainChanged);
-            injectedProvider.removeListener('accountsChanged', (accounts) => handleAccountsChanged(accounts as string[]));
-        }
-    }
-  }, [settings, handleAccountsChanged]);
-
   return (
-    <WalletContext.Provider 
-      value={{ 
-        connectWallet, 
-        disconnectWallet, 
-        walletAddress, 
-        provider,
-        isConnected: !!walletAddress && !!provider
-      }}
-    >
+    <WalletContext.Provider value={{
+      walletAddress,
+      provider,
+      isConnected: !!walletAddress && !!provider,
+      connectWallet,
+      disconnectWallet
+    }}>
       {mounted && appkitEnabled && !isInWorldApp() && (
         <Suspense fallback={null}>
           <AppKitErrorBoundary onError={() => { appkitOpenRef.current = null; }}>
