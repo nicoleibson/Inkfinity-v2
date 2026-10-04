@@ -33,7 +33,17 @@ function VerifyFaceContent() {
   }, [router]);
 
   const onVerificationSuccess = () => {
-    auth.currentUser?.getIdToken(true).then(() => {
+    // Refresh ID token to get new custom claims, then update session cookie
+    auth.currentUser?.getIdToken(true).then(async (idToken) => {
+      try {
+        await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+      } catch (e) {
+        console.warn('Failed to update session cookie:', e);
+      }
       router.push(redirect);
     }).catch(() => {
       router.push(redirect);

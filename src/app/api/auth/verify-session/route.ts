@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminApp } from '@/lib/firebase-admin';
-import { getAuth } from 'firebase-admin/auth';
-import { getDatabase } from 'firebase-admin/database';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function getAdminServices() {
-  const adminApp = getAdminApp();
-  return {
-    adminAuth: getAuth(adminApp),
-    adminDb: getDatabase(adminApp),
-  };
-}
 
 export async function GET(request: NextRequest): Promise<Response> {
   const sessionCookie = request.nextUrl.searchParams.get('session');
@@ -21,7 +11,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
-    const { adminAuth, adminDb } = getAdminServices();
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
+
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
     const uid = decodedClaims.uid;
 

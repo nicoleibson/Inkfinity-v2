@@ -8,8 +8,7 @@
 // (rules: admin-only); only this route (firebase-admin) does.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 
@@ -50,8 +49,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const adminApp = getAdminApp();
-  const db = getDatabase(adminApp);
+  const db = getAdminDb();
 
   const adminSnap = await db.ref(`users/${adminUid}`).get();
   if (!adminSnap.exists() || !isAdmin(adminSnap.val())) {

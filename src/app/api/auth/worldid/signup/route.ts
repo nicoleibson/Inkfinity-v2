@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { verifyWorldIdProof, linkWorldIdToUser, normalizeNullifier } from '@/lib/server/worldid';
 
@@ -54,8 +54,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const nullifier = normalizeNullifier(verification.nullifier)!;
-  const db = getDatabase(getAdminApp());
-  const adminAuth = getAuth(getAdminApp());
+  const db = getAdminDb();
+  const adminAuth = getAdminAuth();
 
   // Check if nullifier already linked (should not happen for signup, but race condition)
   const existingLink = await db.ref(`worldId_nullifiers/${nullifier}`).get();

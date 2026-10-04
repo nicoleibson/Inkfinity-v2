@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Palette, AlertCircle, Loader2, Mail, Chrome, ShieldCheck } from "lucide-react";
+import { Palette, AlertCircle, Loader2, Mail, Chrome, ShieldCheck, AlertCircle as AlertCircleIcon } from "lucide-react";
 import Link from "next/link";
 import { auth, database } from "@/lib/firebase-config";
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, sendEmailVerification } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, sendEmailVerification, sendPasswordResetEmail } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -22,6 +23,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -189,6 +192,41 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) {
+      toast({ variant: "destructive", title: "Email required", description: "Please enter your email address." });
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      // Try Firebase password reset first
+      await sendPasswordResetEmail(auth, forgotEmail);
+      toast({ title: "Reset Email Sent", description: "Check your inbox for the password reset link." });
+      setForgotEmail('');
+    } catch (err: any) {
+      // If Firebase fails (e.g., operation-not-allowed), fall back to support assistant
+      if (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found') {
+        try {
+          const response = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: forgotEmail }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Failed to submit request');
+          toast({ title: "Request Sent", description: "Our support team will contact you shortly to help recover your account." });
+          setForgotEmail('');
+        } catch (fallbackErr: any) {
+          toast({ variant: "destructive", title: "Failed", description: fallbackErr.message });
+        }
+      } else {
+        toast({ variant: "destructive", title: "Failed", description: err.message });
+      }
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <Card className="w-full max-w-sm border-primary/20">
       <form onSubmit={handleLogin}>
@@ -214,12 +252,38 @@ export default function LoginPage() {
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
-              <Link
-                href="/forgot-password"
-                className="text-sm text-primary hover:underline"
-              >
-                Forgot password?
-              </Link>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-primary hover:underline p-0 h-auto">
+                    Forgot password?
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Recover Account Access</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Firebase password reset is disabled. Enter your email and our support team will contact you to help recover your account.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="grid gap-2 py-4">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="m@example.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleForgotPassword} disabled={forgotLoading}>
+                      {forgotLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Send Request'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
             <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>

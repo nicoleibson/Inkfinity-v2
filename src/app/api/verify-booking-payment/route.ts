@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JsonRpcProvider, parseEther } from 'ethers';
 import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { requireAuth } from '@/lib/server/auth';
 import { getTokenPriceUsd, tokenSymbolForNetwork, usdToWeiFloor } from '@/lib/pricing';
 import {
@@ -94,7 +94,7 @@ export function POST(request: NextRequest) {
       return errorResponse(400, 'Unsupported network.', 'INVALID_NETWORK');
     }
 
-    const db = getDatabase(getAdminApp());
+    const db = getAdminDb();
     const bookingRef = db.ref(`bookings/${bookingId}`);
     const bookingSnap = await bookingRef.get();
     if (!bookingSnap.exists()) {

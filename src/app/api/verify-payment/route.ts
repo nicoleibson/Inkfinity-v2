@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JsonRpcProvider, parseEther } from 'ethers';
 import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { add, getISOWeek, getISOWeekYear } from 'date-fns';
 import { requireAuth } from '@/lib/server/auth';
 import {
@@ -103,7 +103,7 @@ export function POST(request: NextRequest) {
       return errorResponse(500, `No RPC URL configured for "${network}".`, 'RPC_NOT_CONFIGURED');
     }
 
-    const db = getDatabase(getAdminApp());
+    const db = getAdminDb();
 
     // --- Identity + expected fee first: everything below compares against this. ---
     const userSnap = await db.ref(`users/${userId}`).get();

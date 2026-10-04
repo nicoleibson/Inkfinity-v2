@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { requireAuth } from '@/lib/server/auth';
 import { linkWorldIdToUser, verifyWorldIdProof } from '@/lib/server/worldid';
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const link = await linkWorldIdToUser(getDatabase(getAdminApp()), auth.user.uid, verification.nullifier);
+  const link = await linkWorldIdToUser(getAdminDb(), auth.user.uid, verification.nullifier);
   if (!link.ok) {
     return NextResponse.json({ error: link.error }, { status: link.status });
   }

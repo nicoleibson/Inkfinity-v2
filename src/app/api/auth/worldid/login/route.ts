@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { verifyWorldIdProof, normalizeNullifier } from '@/lib/server/worldid';
 
@@ -35,8 +35,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const nullifier = normalizeNullifier(verification.nullifier)!;
-  const db = getDatabase(getAdminApp());
-  const adminAuth = getAuth(getAdminApp());
+  const db = getAdminDb();
+  const adminAuth = getAdminAuth();
 
   // Look up the nullifier in the index
   const linkSnap = await db.ref(`worldId_nullifiers/${nullifier}`).get();

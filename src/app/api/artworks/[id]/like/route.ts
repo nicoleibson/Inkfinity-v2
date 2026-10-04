@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, ServerValue } from 'firebase-admin/database';
-import { getAdminApp } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ success: false, error: 'userId is required.' }, { status: 400 });
   }
 
-  const db = getDatabase(getAdminApp());
+  const db = getAdminDb();
   const artworkSnap = await db.ref(`artworks/${artworkId}`).get();
   if (!artworkSnap.exists()) {
     return NextResponse.json({ success: false, error: 'Artwork not found.' }, { status: 404 });

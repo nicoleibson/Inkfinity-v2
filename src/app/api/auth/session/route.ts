@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminApp } from '@/lib/firebase-admin';
-import { getAuth } from 'firebase-admin/auth';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
-
-function getAdminAuth() {
-  const adminApp = getAdminApp();
-  return getAuth(adminApp);
-}
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
@@ -18,17 +12,17 @@ export async function POST(request: NextRequest): Promise<Response> {
       return NextResponse.json({ error: 'No ID token provided' }, { status: 400 });
     }
 
-    const adminAuth = getAuth(getAdminApp());
+    const adminAuth = getAdminAuth();
 
     // Verify the ID token
-    const decodedClaims = await getAuth().verifyIdToken(idToken);
+    const decodedClaims = await adminAuth.verifyIdToken(idToken);
     if (!decodedClaims) {
       return NextResponse.json({ error: 'Invalid ID token' }, { status: 401 });
     }
 
     // Create session cookie (expires in 14 days)
     const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days in ms
-    const sessionCookie = await getAuth().createSessionCookie(idToken, { expiresIn });
+    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
     // Set cookie
     const response = NextResponse.json({ success: true });

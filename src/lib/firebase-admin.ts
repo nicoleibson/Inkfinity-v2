@@ -1,17 +1,18 @@
 // src/lib/firebase-admin.ts
-// Server-side Firebase Admin initialization for Cloud Storage.
-//
-// Credential resolution:
-//  1. If FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY are set (e.g. local dev),
-//     a service account key is used.
-//  2. Otherwise it relies on Application Default Credentials, which Firebase
-//     App Hosting provides automatically through the project's service account.
+// Server-side Firebase Admin initialization.
+// REQUIRES explicit credentials: FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY
+// Application Default Credentials (ADC) are NOT supported in Vercel build environment.
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 
 const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+function parsePrivateKey(key: string): string {
+  // Handle both escaped (\n) and literal newlines
+  return key.includes('\\n') ? key.replace(/\\n/g, '\n') : key;
+}
 
 export function getAdminApp() {
   if (getApps().length > 0) {
@@ -21,22 +22,38 @@ export function getAdminApp() {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-  if (clientEmail && privateKey && projectId) {
-    return initializeApp({
-      projectId,
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey: privateKey.replace(/\\n/g, '\n'),
-      }),
-    });
+  if (!clientEmail || !privateKey) {
+    throw new Error(
+      'Firebase Admin credentials missing. ' +
+      'Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY environment variables. ' +
+      'ADC is not supported in Vercel build environment.'
+    );
   }
 
-  return initializeApp({ projectId });
+  if (!projectId) {
+    throw new Error('NEXT_PUBLIC_FIREBASE_PROJECT_ID environment variable is required.');
+  }
+
+  return initializeApp({
+    projectId,
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: parsePrivateKey(privateKey),
+    }),
+  });
 }
 
 export function getAdminStorage() {
   return getStorage(getAdminApp());
+}
+
+export function getAdminAuth() {
+  return getAuth(getAdminApp());
+}
+
+export function getAdminDb() {
+  return getDatabase(getAdminApp());
 }
 
 /**
