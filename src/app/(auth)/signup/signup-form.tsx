@@ -9,14 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Palette, Sparkles, User as UserIcon, CheckCircle, MailCheck } from "lucide-react";
+import { Loader2, Palette, Sparkles, User as UserIcon, CheckCircle, MailCheck, Chrome, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { generateOnboardingContent } from "@/ai/flows/onboarding-assistant";
 import { moderateImage } from "@/ai/flows/image-moderation";
 import type { GenerateOnboardingContentOutput } from "@/ai/schemas/onboarding-assistant-schema";
 import { useToast } from "@/hooks/use-toast";
 import { auth, database } from "@/lib/firebase-config";
-import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, reload, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, reload, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithCustomToken, type User as FirebaseUser } from "firebase/auth";
 import { ref as dbRef, set, update, get } from "firebase/database";
 import { add } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -140,6 +140,88 @@ export default function SignupForm() {
         }
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      // For Google signup, we skip email verification and go straight to profile setup
+      setFormData(prev => ({ ...prev, email: user.email! }));
+      setStep(3);
+      toast({ title: "Google Account Linked", description: "Now complete your profile." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Google Signup Failed", description: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWorldIdSignup = async () => {
+    setLoading(true);
+    try {
+      const { IDKit, orbLegacy } = await import('@worldcoin/idkit');
+
+      // Get RP context from public endpoint
+      const rpResponse = await fetch('/api/auth/worldid/rp-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!rpResponse.ok) throw new Error(`RP context failed (${rpResponse.status})`);
+      const rp = await rpResponse.json();
+
+      const request = await IDKit.request({
+        app_id: (process.env.NEXT_PUBLIC_WORLD_APP_ID || '') as `app_${string}`,
+        action: 'inkfinity-auth',
+        rp_context: {
+          rp_id: rp.rp_id,
+          nonce: rp.nonce,
+          created_at: rp.created_at,
+          expires_at: rp.expires_at,
+          signature: rp.signature,
+        },
+        allow_legacy_proofs: true,
+        environment: rp.environment,
+      }).preset(orbLegacy());
+
+      const completion = await request.pollUntilCompletion({ timeout: 120000 });
+      if (!completion.success) {
+        throw new Error(completion.error || 'Verification was not completed.');
+      }
+
+      // Send to signup endpoint with profile data
+      const signupResponse = await fetch('/api/auth/worldid/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idkitResponse: completion.result,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          role: formData.role,
+          stylePreferences: formData.stylePreferences,
+        }),
+      });
+
+      if (!signupResponse.ok) {
+        const body = await signupResponse.json().catch(() => null);
+        throw new Error(body?.detail || body?.error || 'World ID signup failed.');
+      }
+
+      const { customToken } = await signupResponse.json();
+      await signInWithCustomToken(auth, customToken);
+
+      // After sign-in, go to step 4 (bio/avatar) since profile basics are already set
+      setStep(4);
+      toast({ title: "World ID Signup Successful", description: "Complete your bio and profile picture." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "World ID Signup Failed", description: err.message });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -387,17 +469,45 @@ export default function SignupForm() {
               <Label htmlFor="password">Password</Label>
               <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
             </div>
-            <div className="flex items-center space-x-2 mt-2">
-                <Checkbox id="terms" checked={agreedToTerms} onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)} />
-                <label
-                    htmlFor="terms"
-                    className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                    I agree to the{" "}
-                    <Link href="/terms" target="_blank" className="underline hover:text-primary">
-                    Terms and Conditions
-                    </Link>
-                </label>
+            <div className="grid gap-2">
+              <Button variant="outline" className="w-full" onClick={handleGoogleSignup} disabled={loading}>
+                <Chrome className="mr-2 h-4 w-4" />
+                Continue with Google
+              </Button>
+              <Button variant="outline" className="w-full" onClick={handleWorldIdSignup} disabled={loading}>
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Continue with World ID
+              </Button>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" name="email" type="email" placeholder="m@example.com" value={formData.email} onChange={handleChange} required />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox id="terms" checked={agreedToTerms} onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)} />
+                  <label
+                      htmlFor="terms"
+                      className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                      I agree to the{" "}
+                      <Link href="/terms" target="_blank" className="underline hover:text-primary">
+                      Terms and Conditions
+                      </Link>
+                  </label>
+              </div>
             </div>
           </div>
         )}
