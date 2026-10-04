@@ -32,38 +32,30 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
   const [verificationResult, setVerificationResult] = useState<VerifyFaceOutput | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const { toast } = useToast();
   const [profile, setProfile] = useState<Partial<UserProfile>>({});
-  const [stream, setStream] = useState<MediaStream | null>(null);
 
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (user) {
-        const userRef = ref(database, `users/${user.uid}`);
-        get(userRef).then(snapshot => {
-            if (snapshot.exists()) {
-                setProfile(snapshot.val());
-            }
-        });
+  const stopCamera = useCallback(() => {
+    const currentStream = streamRef.current;
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   }, []);
 
-  const stopCamera = useCallback(() => {
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-    }
-  }, [stream]);
-
   const startCamera = useCallback(async () => {
-    if (stream) { // If a stream is already active, do nothing.
-        return;
+    if (streamRef.current) {
+      return;
     }
     setIsStartingCamera(true);
     const result = await requestCamera();
     setIsStartingCamera(false);
     if (result.ok) {
-      setStream(result.stream);
+      streamRef.current = result.stream;
       setHasCameraPermission(true);
       setCameraError(null);
       if (videoRef.current) {
@@ -79,7 +71,7 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         description: cameraErrorDescription(result.diagnostics.error),
       });
     }
-  }, [toast, stream]);
+  }, [toast]);
 
   const retryCamera = useCallback(async () => {
     stopCamera();
@@ -91,7 +83,6 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
   useEffect(() => {
     startCamera();
     
-    // Cleanup function to stop the camera when the component unmounts
     return () => {
       stopCamera();
     };
@@ -251,7 +242,7 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
       </div>
       
       <div className="flex flex-col sm:flex-row gap-2">
-        <Button onClick={captureAndProcessFace} disabled={!hasCameraPermission || isProcessingFace || !profile.facialScanUrl || !stream} className="w-full">
+        <Button onClick={captureAndProcessFace} disabled={!hasCameraPermission || isProcessingFace || !profile.facialScanUrl || !streamRef.current} className="w-full">
           {isProcessingFace ? <Loader2 className="animate-spin mr-2" /> : <Camera className="mr-2"/>}
           {isProcessingFace ? "Verifying..." : "Verify Identity"}
         </Button>
