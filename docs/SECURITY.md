@@ -32,11 +32,18 @@ This document provides a comprehensive overview of the security architecture and
 - **Multi-Layer Verification Chain:** The verification is not a single AI call. It is a pipeline of layered checks, each one sitting behind the previous, so the system does not rely on any single model:
   1. **Client-side face detection** (`src/lib/client/face-capture.ts`): MediaPipe `FaceDetector` (GPU with CPU fallback, local WASM) counts faces. 0 or >1 faces → rejected immediately.
   2. **Liveness / anti-spoofing** (`captureLiveSequence`): MediaPipe `FaceLandmarker` samples ~2.2s at ~9fps (input downscaled to 256px for low-end devices), requiring the face to stay visible (≥60% of samples) AND either a **blink** (`eyeBlinkLeft/Right ≥ 0.6`) or **natural 3D head motion** (≥ 4° pitch/yaw/roll). A static printed photo fails this. If the model is unavailable the check fails *open* ("unavailable").
-  3. **Deterministic face embeddings** (`src/lib/client/face-recognition.ts`): face-api.js computes a 128-D descriptor from the live frame and compares it to the registered `facialDescriptor` (stored in the user's RTDB record). Euclidean distance &lt; 0.6 = match; a hard mismatch (≥ 0.6) **blocks before any AI call**. If no descriptor is registered, it fails *open*.
+  3. **Deterministic face embeddings** (`src/lib/client/face-recognition.ts`): face-api.js computes a 128-D descriptor from the live frame and compares it to the registered `facialDescriptor` (stored in the user's RTDB record). Euclidean distance < 0.6 = match; a hard mismatch (≥ 0.6) **blocks before any AI call**. If no descriptor is registered, it fails *open*.
   4. **Generative comparison with confidence** (`src/ai/flows/verify-face-flow.ts`): Genkit/Gemini agent (`verify-face-agent.ts`) receives the registered scan **plus 3 chronological live captures** (`verify-face-schema.ts`, inputs required) and returns `isMatch` + a numeric `confidence` (0-1). Acceptance requires `isMatch && confidence ≥ 0.8`; the confidence is shown to the user.
 - **Escalating Rate Limiting** (`src/lib/face-lock.ts`): every failure is recorded transactionally in `users/{uid}/facialAttempts` (`failed`, `lockedUntil`). Locks escalate: 3 failures → 30s, 5 → 5 min, 7 → 30 min (cap). Checked before every attempt on `/verify-face` and `/settings` (client + DB-enforced).
 - **Email-Link Fallback** (`src/lib/email-fallback.ts`): when the camera fails or the account is locked, the user can request a **Firebase Auth email sign-in link** (`sendSignInLinkToEmail`). The email is embedded in the link URL, so clicking it works from any browser/device. `/verify-face/email-link` completes `signInWithEmailLink`, resets the failure counter, and redirects home. Requires the app to be served from an **authorized domain** (Firebase Console → Authentication → Settings → Authorized domains).
 - **No Recovery Code:** the previous recovery-code flow was removed; the email link is the single camera-independent fallback.
+- **Dedicated `face_verified` cookie for immediate middleware enforcement:**
+  - After successful verification, `FaceVerifier` sets a client-side cookie: `face_verified=true; max-age=3600; sameSite=lax`.
+  - Middleware (`src/middleware.ts`) checks this cookie **in addition** to the `faceVerified` custom claim.
+  - This eliminates the race condition where a user could bypass facial verification by navigating to `/` before the session cookie propagated the new custom claim.
+  - Cookie expires in 1 hour (matching the custom claim TTL) and is cleared on logout (`/verify-face` logout handler).
+  - Middleware checks **both** the custom claim (`faceVerified === true`) **and** the dedicated cookie (`face_verified=true`) — either allows access.
+  - This closes the bypass where a user could navigate to `/` immediately after verification before the session cookie propagated.
 
 ### 2.2. Multi-Session Detection
 - **Real-time Alerts:** The platform actively monitors user sessions in real-time.

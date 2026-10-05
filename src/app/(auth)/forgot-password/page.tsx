@@ -15,6 +15,8 @@ import { auth } from "@/lib/firebase-config";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 
+export const dynamic = 'force-dynamic';
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);

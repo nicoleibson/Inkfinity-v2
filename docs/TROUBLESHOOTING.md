@@ -78,122 +78,17 @@ Follow these steps to add the current URL to your Reown project's allowlist:
 3.  **Go to App Configuration:** Open **App Configuration → Domains** (este es el allowlist de Reown).
 
 4.  **Add the Origin URL:**
-    *   Find the section named **Allowed Domains** (o **Allowed Origins**).
-    *   Añade `inkfinity-ten.vercel.app` y, si pruebas en otro host, también ese host (ej. el dominio de un túnel).
+    *   For local development: add `http://localhost:3000` (or whatever port you use).
+    *   For production: add `https://inkfinity-ten.vercel.app`.
+    *   If you use preview deployments (Vercel preview URLs), add the pattern `*.vercel.app` to cover all preview deployments automatically.
 
-5.  **Add Localhost (Recommended):** While you are here, it's a good idea to also add your local development URL so you can run the project on your own machine in the future:
-    ```
-    localhost:3000
-    ```
+5.  **Save Changes:** Click **Save** or **Apply**.
 
-6.  **Save and Refresh:** Save the changes on the Reown dashboard. Then, return to your development workspace tab and **refresh the page**. The wallet connection should now work correctly.
+6.  **Test:** Reload your application and try connecting your wallet again. The error should be gone.
 
-> Si el error aparece solo en un túnel puntual (cloudflared/ngrok), el dominio cambia en cada lanzamiento: añade el host de ese túnel o usa el flujo sin Project ID (que cae a `window.ethereum`, sin requerír de Reown).
+> **Note:** If you are using a preview deployment (e.g., `inkfinity-git-feature-xyz.vercel.app`), the `*.vercel.app` wildcard in step 4 will cover it. You only need to add specific URLs for custom domains.
 
 ---
-
-## "no such account" al enviar una transacción (web / MetaMask)
-
-### Problem
-`BrowserProvider` / `JsonRpcSigner` lanza `no such account` (o `could not coalesce error`) al firmar, aunque la wallet esté conectada y con saldo.
-
-### Cause
-El navegador puede exponer varias cuentas (`eth_accounts`) mientras `ethers` tiene cacheada otra distinta, o la cuenta cacheada pertenece a una red diferente a la esperada.
-
-### Solution
-Pasa siempre la dirección explícitamente al pedir el signer:
-
-```ts
-const signer = provider.getSigner(walletAddress ?? undefined);
-```
-
-Este patrón ya está aplicado en `src/components/payment/payment-form.tsx` y en los flujos de depósito/reembolso de `src/components/bookings/booking-list.tsx`. Si reintroduces un `getSigner()` sin argumento, el bug vuelve a aparecer.
-
----
-
-## World App: la conexión falla o el SIWE se rechaza
-
-### Problem
-Dentro de la World App, "Connect Wallet" no conecta, o MiniKit lanza un error de dominio / challenge inválido.
-
-### Cause
-1. **Dominio no registrado en el Developer Portal.** MiniKit deriva el `domain` y el `uri` del SIWE de `window.location`. Si el host actual no está en la allowlist de tu app, la World App rechaza la firma.
-2. **App ID ausente o incorrecto.** `MiniKit.install()` necesita `NEXT_PUBLIC_WORLD_APP_ID`; si falta, la inicialización falla y el provider no queda disponible.
-3. **Falta el rebuild.** Las variables `NEXT_PUBLIC_*` se incrustan en build: añadirlas en Vercel no cambia nada hasta redesplegar.
-4. **No estás dentro de la World App.** `isInWorldApp()` es false en un navegador normal; ahí el flujo correcto es AppKit, no MiniKit.
-
-### Solution
-- Registra `inkfinity-ten.vercel.app` en <https://developer.world.org> para el app de `NEXT_PUBLIC_WORLD_APP_ID`.
-- Confirma que `NEXT_PUBLIC_WORLD_APP_ID` está definida en Vercel y **rebuild**.
-- Para probar en local, `localhost` suele requerir una app de desarrollo habilitada en el portal.
-- Diagnóstico: dentro de la World App debe existir `window.WorldApp` y el badge de red debe mostrar **WorldChain / WLD**.
-
----
-
-## World App: el pago devuelve `userOpHash` y la verificación no completa
-
-### Problem
-El pago se firma correctamente en la World App, pero la membresía o la reserva no se activan, o el servidor responde `202`.
-
-### Cause
-Dentro de la World App los pagos son **ERC-4337 userOperations**: `MiniKit.sendTransaction` devuelve un `userOpHash` (no un `txHash`) y no se puede hacer `tx.wait()`. La resolución se hace contra:
-
-```
-GET https://developer.world.org/api/v2/minikit/userop/{userOpHash}
-```
-
-que responde `pending`, `failed` o un `transaction_hash` final. Además, las transacciones ERC-4337 apuntan al **EntryPoint** con `value = 0`, así que validar el `tx.to` / `tx.value` de la transacción superior **no** describe lo que el usuario firmó.
-
-### Solution / estado actual
-Los pagos se verifican server-side; la implementación ya no tiene los fallos descritos arriba. Para diagnóstico:
-
-- `/api/verify-payment` y `/api/verify-booking-payment` responden:
-  - `202` + `TX_PENDING` → aún no confirmada. **El cliente reintenta solo** (polling); si ves este toast, la transferencia sí salió, no vuelvas a pagar. Las userOps también necesitan 5 confirmaciones, así que esta respuesta es normal en los primeros segundos.
-  - `409` + `PAYMENT_ALREADY_USED` → otro usuario (u otra reserva) canjeó ese pago. Si es el **mismo** usuario y la misma reserva, la respuesta es un éxito idempotente, no un error: reintentar es seguro.
-  - `422` + `WRONG_RECIPIENT` / `INSUFFICIENT_VALUE` → el pago no coincide con lo esperado.
-  - `422` + `WRONG_SENDER` → el pago salió de una wallet que no es la registrada en la cuenta. Suele ser la wallet equivocada en el perfil, no un intento de fraude: corrige `walletAddress` y vuelve a pagar.
-  - `422` + `MISSING_PAYER_WALLET` → la cuenta (o la reserva) no tiene `walletAddress` registrado. El servidor falla en cerrado en vez de adivinar: rellénalo en Ajustes antes de pagar.
-  - `422` + `SENDER_UNKNOWN` → no se pudo determinar quién envió el pago; no se liquida.
-  - `422` + `WALLET_CLAIMED_BY_ANOTHER_ACCOUNT` → esa wallet ya está vinculada a otra cuenta. No es un fallo del pago: revisa que estés conectado con la wallet correcta.
-  - `422` + `USEROP_UNVERIFIABLE` → el bundler devolvió una userOp que no corresponde al hash declarado.
-  - `502` + `USEROP_LOOKUP_FAILED` → no se pudo contactar con el Developer Portal.
-  - `503` + `PRICE_UNAVAILABLE` → falta precio de referencia; no se liquida el depósito.
-  - `401` + `UNAUTHENTICATED` → sesión Firebase caducada o el cliente no envió el token.
-
-- **Si los pagos de la World App se rechazan sistemáticamente**, revisa `RPC_WORLDCHAIN_BUNDLER_URL`. Sin bundler se usa el delta de saldo del receptor en el bloque de liquidación (correcto, pero conservative). Un bundler mal configurado hace *peor* la verificación: el código recalcula el `userOpHash` y rechaza cualquier respuesta que no coincida.
-
-- **Si el toast dice "Awaiting Confirmation"**: la transferencia salió pero aún no hay 5 confirmaciones. **No vuelvas a pagar.** El polling dura 2 minutos; si se agota, la referencia del pago queda guardada en el navegador y el botón pasa a ser **"Check again"** (o "Check refund" para el artista), que solo re-verifica sin enviar nada. Ese reintento es seguro: el servidor consume el claim de forma atómica y no puede liquidar dos veces. La referencia también se muestra en pantalla para comprobar el estado en WorldScan. No hay job en background: si el usuario cierra la página, el botón sigue ahí al volver, porque la referencia se persiste en `localStorage` (`src/lib/pending-payment.ts`). Esa referencia caduca a los **7 días**: pasado ese plazo el botón vuelve a ser el de pago normal, porque una transferencia sin confirmar en una semana ya no se va a liquidar presionando un botón.
-
-> No resuelvas userOperations con un RPC público: los RPC públicos de WorldChain rechazan `eth_getUserOperationByHash` (Alchemy responde `401: Only core evm requests are allowed.`).
-
----
-
-## 401 `UNAUTHENTICATED` al confirmar un pago
-
-### Problem
-El pago se envió pero el servidor responde `401` con `UNAUTHENTICATED`.
-
-### Cause
-Los endpoints de verificación usan el Admin SDK (que ignora `database.rules.json`), así que exigen `Authorization: Bearer <Firebase ID token>`. Si la sesión caducó, el `getIdToken()` devuelve un token inválido o no hay usuario.
-
-### Solution
-- El cliente obtiene el token de `auth.currentUser.getIdToken()`. Si el usuario no ha iniciado sesión, no se puede liquidar nada: eso es intencionado.
-- Tras un `firebase login`/`logout` o un refresh de token caducado, reintenta la confirmación; **no** pagues de nuevo.
-
----
-
-## La reserva no se confirma aunque la transferencia se hizo
-
-### Problem
-El depósito se envió al wallet del artista pero la reserva sigue en `awaiting_payment`.
-
-### Cause
-El estado ya no lo escribe el cliente: `/api/verify-booking-payment` lo cambia solo tras probar la transferencia on-chain. Si la regla de la base de datos no está desplegada, o si la verificación falla, la reserva se queda como está.
-
-### Solution
-1. Despliega las reglas: `firebase deploy --only database --project inkfinity-2d470` (ver `docs/DEPLOYMENT.md` §5.2). Las reglas nuevas bloquean los campos de pago y el paso a `confirmed` desde el navegador.
-2. Comprueba la respuesta del endpoint en la consola del navegador: si es `422 INSUFFICIENT_VALUE`, el importe enviado quedó por debajo del mínimo tolerado (10% de margen sobre el precio de referencia). Si es `503 PRICE_UNAVAILABLE`, falta `PRICE_API_BASE_URL`.
-3. Verifica que el `depositAmount` de la reserva no se haya modificado: las reglas ya no permiten bajarlo.
 
 ## World ID: `WORLDID_UNAVAILABLE`
 
@@ -249,3 +144,44 @@ Tras desplegar las reglas nuevas, crear una cuenta devuelve `PERMISSION_DENIED`.
 
 ### Solution
 Los campos inicializadores que el cliente sí puede escribir en el alta están permitidos explícitamente: `role` (solo los cuatro roles no privilegiados), `status` (`active` / `pending_verification` / `pending_payment`) y `referralCodeUsed: false`. Cualquier otro valor es de solo servidor (Admin SDK, que ignora las reglas). Si un flujo legítimo nuevo necesita escribir otro campo, añádelo como rama de creación en su `.validate` y con un test en `scripts/test-booking-rules.mjs`.
+
+---
+
+## Verificación Facial: Bypass tras verificación exitosa (solucionado)
+
+### Problema
+Tras completar la verificación facial en `/verify-face`, el usuario es redirigido a la página objetivo (ej. `/`) pero es inmediatamente redirigido de vuelta a `/verify-face` en bucle. La verificación facial pareció exitosa, pero el middleware seguía bloqueando el acceso.
+
+### Causa
+La verificación facial actualiza correctamente el custom claim `faceVerified` en Firebase Auth, y el cliente llama a `getIdToken(true)` para refrescar el ID token. Sin embargo, la cookie de sesión (`__session`) que usa el middleware **no se actualiza automáticamente** cuando cambian los custom claims. La cookie solo se refresca en el próximo login o cuando se refresca explícitamente vía `/api/auth/session`. Esto crea una ventana donde el usuario tiene los custom claims actualizados en su ID token (en memoria), pero el middleware sigue viendo la cookie de sesión antigua sin el claim `faceVerified`, por lo que redirige de vuelta a `/verify-face`.
+
+### Solución
+Se implementó una **cookie dedicada `face_verified`** que se setea inmediatamente en el cliente tras la verificación exitosa:
+
+1. **Cliente setea cookie inmediatamente** (`src/components/auth/face-verifier.tsx`):
+   ```js
+   document.cookie = 'face_verified=true; path=/; max-age=3600; sameSite=lax';
+   ```
+
+2. **Middleware verifica ambas fuentes** (`src/middleware.ts`):
+   - Verifica el custom claim `faceVerified` de la cookie de sesión (vía `/api/auth/verify-session`)
+   - **También** verifica la cookie dedicada `face_verified` directamente: `request.cookies.get('face_verified')?.value === 'true'`
+   - Cualquier fuente permite el acceso: `faceVerifiedFlag = faceVerified === true || faceVerifiedCookie`
+
+3. **Logout limpia la cookie** (`src/app/verify-face/page.tsx`):
+   ```js
+   document.cookie = 'face_verified=; path=/; max-age=0; sameSite=lax';
+   ```
+
+**Propiedades de la cookie:** `face_verified=true; path=/; max-age=3600; sameSite=lax` (TTL 1h, coincide con TTL del custom claim).
+
+### Verificación
+Tras el fix, el flujo es:
+1. Usuario completa verificación facial en `/verify-face`
+2. Cliente setea cookie `face_verified=true` inmediatamente
+3. Cliente llama `/api/auth/face-verified` para setear custom claim (async)
+5. Cliente llama `/api/auth/session` para refrescar cookie de sesión (opcional, para propagar claim)
+6. Redirige a página objetivo
+6. Middleware ve cookie `face_verified` → **permite acceso inmediatamente**
+
+Esto elimina la condición de carrera por completo, ya que la cookie se setea síncronamente en el navegador antes de la redirección.
