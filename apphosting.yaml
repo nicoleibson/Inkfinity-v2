@@ -10,3 +10,6 @@ secrets:
   # Mapea el secreto GEMINI_API_KEY de Google Cloud a la variable de entorno GEMINI_API_KEY
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
+  # Mapea el secreto FACE_VERIFICATION_SECRET de Google Cloud a la variable de entorno FACE_VERIFICATION_SECRET
+  - variable: FACE_VERIFICATION_SECRET
+    secret: FACE_VERIFICATION_SECRET

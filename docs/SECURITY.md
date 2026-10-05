@@ -37,13 +37,10 @@ This document provides a comprehensive overview of the security architecture and
 - **Escalating Rate Limiting** (`src/lib/face-lock.ts`): every failure is recorded transactionally in `users/{uid}/facialAttempts` (`failed`, `lockedUntil`). Locks escalate: 3 failures → 30s, 5 → 5 min, 7 → 30 min (cap). Checked before every attempt on `/verify-face` and `/settings` (client + DB-enforced).
 - **Email-Link Fallback** (`src/lib/email-fallback.ts`): when the camera fails or the account is locked, the user can request a **Firebase Auth email sign-in link** (`sendSignInLinkToEmail`). The email is embedded in the link URL, so clicking it works from any browser/device. `/verify-face/email-link` completes `signInWithEmailLink`, resets the failure counter, and redirects home. Requires the app to be served from an **authorized domain** (Firebase Console → Authentication → Settings → Authorized domains).
 - **No Recovery Code:** the previous recovery-code flow was removed; the email link is the single camera-independent fallback.
-- **Dedicated `face_verified` cookie for immediate middleware enforcement:**
-  - After successful verification, `FaceVerifier` sets a client-side cookie: `face_verified=true; max-age=3600; sameSite=lax`.
-  - Middleware (`src/middleware.ts`) checks this cookie **in addition** to the `faceVerified` custom claim.
-  - This eliminates the race condition where a user could bypass facial verification by navigating to `/` before the session cookie propagated the new custom claim.
-  - Cookie expires in 1 hour (matching the custom claim TTL) and is cleared on logout (`/verify-face` logout handler).
-  - Middleware checks **both** the custom claim (`faceVerified === true`) **and** the dedicated cookie (`face_verified=true`) — either allows access.
-  - This closes the bypass where a user could navigate to `/` immediately after verification before the session cookie propagated.
+- **HMAC-Signed Facial Grants (tamper-proof):** Facial verification is enforced via httpOnly HMAC-signed cookies (`face_req_signed` and `face_verified_signed`, `src/lib/crypto/hmac.ts`, Web Crypto for Edge-runtime compatibility). The grant is issued **only after the server re-runs the face comparison** (`/api/auth/face-verified`) against the registered scan in the database, and it must match the account's UID in the middleware. This prevents client-side forging, CSRF-style elevation, and bypasses caused by race conditions.
+- **Membership-gated enforcement:** 2FA is only required or allowed for users with an **active paid membership** (`src/lib/utils/membership.ts`). If membership expires, facial verification is not enforced and cannot be activated until membership is valid.
+- **FACE_VERIFICATION_SECRET:** Set `FACE_VERIFICATION_SECRET` in `.env.local` and all Vercel environments (Production/Preview/Development). This is an auto-generated, random 64-char secret (e.g. `openssl rand -base64 48`) used as the HMAC key; rotating it invalidates active grants (all 2FA users will be asked to re-verify on next request). If unset in production the server throws to avoid signing with an insecure default.
+- **Logout clears grants:** `POST /api/auth/logout` deletes the httpOnly signed cookies; the header sign-out calls it first.
 
 ### 2.2. Multi-Session Detection
 - **Real-time Alerts:** The platform actively monitors user sessions in real-time.
