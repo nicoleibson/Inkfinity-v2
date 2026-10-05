@@ -165,7 +165,11 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
                 title: 'Verification Successful',
                 description: `${result.reason} (confidence ${confidencePercent}%).`,
             });
-            // Record face verification in custom claims
+            // Set dedicated face_verified cookie for immediate middleware check
+            if (typeof document !== 'undefined') {
+              document.cookie = 'face_verified=true; path=/; max-age=3600; sameSite=lax';
+            }
+            // Record face verification in custom claims (async, non-blocking)
             try {
               await fetch('/api/auth/face-verified', {
                 method: 'POST',

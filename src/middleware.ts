@@ -60,7 +60,9 @@ export async function middleware(request: NextRequest) {
     }
 
     const needsFaceVerification = profile.twoFactorEnabled === true && profile.facialScanUrl;
-    const faceVerifiedFlag = faceVerified === true;
+    // Check both custom claim (from session cookie) and dedicated cookie
+    const faceVerifiedCookie = request.cookies.get('face_verified')?.value === 'true';
+    const faceVerifiedFlag = faceVerified === true || faceVerifiedCookie;
     const maxAge = 60 * 60 * 1000; // 1 hora
 
     if (needsFaceVerification && !faceVerifiedFlag) {
