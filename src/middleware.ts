@@ -42,14 +42,24 @@ export async function middleware(request: NextRequest) {
   try {
     // Llamar a API interna para verificar sesión y obtener perfil
     const verifyUrl = new URL('/api/auth/verify-session', request.url);
-    verifyUrl.searchParams.set('session', request.cookies.get('__session')?.value || '');
+    verifyUrl.searchParams.set('session', sessionCookie);
     
     const response = await fetch(verifyUrl.toString(), {
       headers: { 'Content-Type': 'application/json' },
+      // Timeout de 5s para evitar bloqueos
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
-      throw new Error('Session verification failed');
+      // Si la sesión es inválida/expirada (401/403), redirigir a login
+      if (response.status === 401 || response.status === 403) {
+        const response = NextResponse.redirect(new URL('/login', request.url));
+        response.cookies.delete('__session');
+        return response;
+      }
+      // Otros errores (5xx, network) -> fail-open para no bloquear usuarios legítimos
+      console.warn('Session verification failed (system error):', response.status);
+      return NextResponse.next();
     }
 
     const { uid, profile, faceVerified, faceVerifiedAt } = await response.json();
@@ -81,9 +91,26 @@ export async function middleware(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('__session');
-    return response;
+    // Solo redirigir a login en errores de autenticación claros
+    // En errores de sistema (red, config, timeout) -> fail-open
+    console.warn('Middleware session verification error:', error);
+    
+    // Si el error indica sesión inválida, redirigir a login
+    if (error instanceof Error && (
+      error.message.includes('session') || 
+      error.message.includes('auth') ||
+      error.message.includes('token') ||
+      error.message.includes('unauthorized') ||
+      error.message.includes('expired')
+    )) {
+      const response = NextResponse.redirect(new URL('/login', request.url));
+      response.cookies.delete('__session');
+      return response;
+    }
+    
+    // Errores de sistema (red, config, timeout) -> fail-open
+    console.warn('Middleware system error, failing open:', error);
+    return NextResponse.next();
   }
 }
 
