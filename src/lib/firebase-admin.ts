@@ -41,6 +41,7 @@ export function getAdminApp() {
       clientEmail,
       privateKey: parsePrivateKey(privateKey),
     }),
+    databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || `https://${projectId}-default-rtdb.firebaseio.com`,
   });
 }
 
