@@ -51,10 +51,6 @@ function VerifyFaceContent() {
   };
 
   const handleLogout = async () => {
-    // Clear face_verified cookie on logout
-    if (typeof document !== 'undefined') {
-      document.cookie = 'face_verified=; path=/; max-age=0; sameSite=lax';
-    }
     await signOut(auth);
     router.push('/login');
   };

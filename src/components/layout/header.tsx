@@ -112,6 +112,8 @@ export default function Header() {
   const handleSignOut = async () => {
     try {
       setMobileMenuOpen(false);
+      // Clear the httpOnly session and facial-verification cookies server-side first.
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
       await signOut(auth);
       toast({
         title: "Signed Out",

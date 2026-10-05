@@ -15,6 +15,7 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signIn
 import { useToast } from "@/hooks/use-toast";
 import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
+import { hasActiveMembership } from "@/lib/utils/membership";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function LoginPage() {
@@ -74,7 +75,10 @@ export default function LoginPage() {
       return;
     }
 
-    if (profile.twoFactorEnabled && profile.facialScanUrl) {
+    // Facial verification is only enforced for members with an active paid
+    // membership, so it must not be requested from anyone else here: the
+    // verify-face page would reject them and bounce them back.
+    if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
       router.push('/verify-face');
     } else {
       toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });

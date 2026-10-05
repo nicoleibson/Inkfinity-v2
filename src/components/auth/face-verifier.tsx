@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Camera, ShieldCheck, ShieldX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { verifyFace } from '@/ai/flows/verify-face-flow';
 import type { VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
 import { auth, database } from '@/lib/firebase-config';
 import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
@@ -15,7 +14,6 @@ import type { CameraDiagnostics } from '@/lib/client/camera';
 import { getVerificationLock, registerVerificationFailure, resetVerificationFailures, formatRetryTime } from '@/lib/face-lock';
 import { sendEmailFallbackLink } from '@/lib/email-fallback';
 
-const FACE_CONFIDENCE_THRESHOLD = 0.8;
 import { get, ref } from 'firebase/database';
 import type { UserProfile } from '@/types/user';
 
@@ -147,44 +145,42 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         const frame2 = liveness !== "unavailable" && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
         const frame3 = liveness !== "unavailable" && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
 
-        // Deterministic identity check (face embeddings) is disabled, using AI verification directly.
-        const result = await verifyFace({
-          registeredImageUrl: profile.facialScanUrl,
-          liveCaptureDataUri: primaryFrame,
-          liveCaptureFrame2: frame2,
-          liveCaptureFrame3: frame3,
+        // The server re-runs the comparison against the registered scan stored in the
+        // database and is the only party that decides whether to grant the session.
+        const grantResponse = await fetch('/api/auth/face-verified', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frame1: primaryFrame, frame2, frame3 }),
         });
-        setVerificationResult(result);
 
-        const accepted = result.isMatch && (result.confidence ?? 0) >= FACE_CONFIDENCE_THRESHOLD;
-        const confidencePercent = Math.round((result.confidence ?? 0) * 100);
+        const grant = (await grantResponse.json().catch(() => ({}))) as {
+          success?: boolean;
+          confidence?: number;
+          reason?: string;
+        };
 
-        if (accepted) {
+        const confidence = grant.confidence ?? 0;
+        const confidencePercent = Math.round(confidence * 100);
+        setVerificationResult({
+          isMatch: grant.success === true,
+          confidence,
+          reason: grant.reason ?? 'Verification could not be completed.',
+        });
+
+        if (grantResponse.ok && grant.success === true) {
             await resetVerificationFailures(uid);
             toast({
                 title: 'Verification Successful',
-                description: `${result.reason} (confidence ${confidencePercent}%).`,
+                description: `${grant.reason ?? 'Identity confirmed.'} (confidence ${confidencePercent}%).`,
             });
-            // Set dedicated face_verified cookie for immediate middleware check
-            if (typeof document !== 'undefined') {
-              document.cookie = 'face_verified=true; path=/; max-age=3600; sameSite=lax';
-            }
-            // Record face verification in custom claims (async, non-blocking)
-            try {
-              await fetch('/api/auth/face-verified', {
-                method: 'POST',
-                credentials: 'include',
-              });
-            } catch (e) {
-              console.warn('Failed to record face verification claim:', e);
-            }
             onVerificationSuccess();
         } else {
             await registerVerificationFailure(uid);
             toast({
                 variant: 'destructive',
                 title: 'Verification Failed',
-                description: `${result.reason} (confidence ${confidencePercent}%).`,
+                description: `${grant.reason ?? 'Identity could not be confirmed.'}${grantResponse.status === 403 ? ' An active membership is required.' : ''}`,
             });
             onVerificationFail?.();
         }

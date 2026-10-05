@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyFaceRequirement, verifyFaceVerified } from '@/lib/crypto/hmac';
+import { hasActiveMembership } from '@/lib/utils/membership';
 
 const PUBLIC_PATHS = [
   '/',
@@ -19,11 +21,28 @@ const PUBLIC_PATHS = [
 ];
 
 const STATIC_EXTENSIONS = ['.ico', '.png', '.jpg', '.jpeg', '.svg', '.css', '.js', '.woff', '.woff2', '.ttf', '.eot'];
+const FACE_GRANT_COOKIES = ['face_req_signed', 'face_verified_signed'];
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return true;
   if (STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext))) return true;
   return false;
+}
+
+function redirectToLogin(request: NextRequest): NextResponse {
+  const response = NextResponse.redirect(new URL('/login', request.url));
+  response.cookies.delete('__session');
+  for (const name of FACE_GRANT_COOKIES) {
+    response.cookies.delete(name);
+  }
+  return response;
+}
+
+function redirectToVerifyFace(request: NextRequest, pathname: string, expired = false): NextResponse {
+  const url = new URL('/verify-face', request.url);
+  url.searchParams.set('redirect', pathname);
+  if (expired) url.searchParams.set('expired', 'true');
+  return NextResponse.redirect(url);
 }
 
 export async function middleware(request: NextRequest) {
@@ -41,76 +60,82 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Llamar a API interna para verificar sesión y obtener perfil
+    // The facial-verification grant is carried by an HMAC-signed cookie rather than by
+    // the profile, so an infrastructure failure in verify-session cannot silently drop
+    // the 2FA requirement (the old fail-open path let members skip the face check).
+    const faceRequirement = await verifyFaceRequirement(request.cookies.get('face_req_signed')?.value);
+    const faceGrant = await verifyFaceVerified(request.cookies.get('face_verified_signed')?.value);
+
+    if (faceRequirement.valid && faceRequirement.requiresFaceVerification) {
+      // A grant is only accepted when it is signed for this same account; a grant
+      // belonging to someone else must not satisfy the requirement.
+      if (!faceGrant.valid || faceGrant.uid !== faceRequirement.uid) {
+        return redirectToVerifyFace(request, pathname);
+      }
+    }
+
     const verifyUrl = new URL('/api/auth/verify-session', request.url);
     verifyUrl.searchParams.set('session', sessionCookie);
-    
+
     const response = await fetch(verifyUrl.toString(), {
       headers: { 'Content-Type': 'application/json' },
-      // Timeout de 5s para evitar bloqueos
       signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
-      // Si la sesión es inválida/expirada (401/403), redirigir a login
+      // 401/403 mean the session itself is invalid or revoked.
       if (response.status === 401 || response.status === 403) {
-        const response = NextResponse.redirect(new URL('/login', request.url));
-        response.cookies.delete('__session');
-        return response;
+        return redirectToLogin(request);
       }
-      // Otros errores (5xx, network) -> fail-open para no bloquear usuarios legítimos
-      console.warn('Session verification failed (system error):', response.status);
+      // Anything else is an infrastructure problem. Access is allowed, but the
+      // signed requirement above has already been enforced for 2FA members.
+      console.warn('[middleware] session verification unavailable:', response.status);
       return NextResponse.next();
     }
 
-    const { uid, profile, faceVerified, faceVerifiedAt } = await response.json();
+    const { uid, profile, faceVerifiedAt } = await response.json();
 
     if (!profile) {
       return NextResponse.next();
     }
 
-    const needsFaceVerification = profile.twoFactorEnabled === true && profile.facialScanUrl;
-    // Check both custom claim (from session cookie) and dedicated cookie
-    const faceVerifiedCookie = request.cookies.get('face_verified')?.value === 'true';
-    const faceVerifiedFlag = faceVerified === true || faceVerifiedCookie;
-    const maxAge = 60 * 60 * 1000; // 1 hora
-
-    if (needsFaceVerification && !faceVerifiedFlag) {
-      const verifyFaceUrl = new URL('/verify-face', request.url);
-      verifyFaceUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(verifyFaceUrl);
+    // Defence in depth: the signed cookie above is the fast path and holds even when
+    // verify-session is unavailable, but when the profile does come back it is
+    // authoritative, so a missing or stale requirement cookie cannot be used to skip 2FA.
+    const profileNeedsFace =
+      profile.twoFactorEnabled === true &&
+      Boolean(profile.facialScanUrl) &&
+      hasActiveMembership(profile);
+    if (profileNeedsFace && (!faceGrant.valid || faceGrant.uid !== uid)) {
+      return redirectToVerifyFace(request, pathname);
     }
 
-    if (faceVerifiedFlag && typeof faceVerifiedAt === 'number') {
-      if (Date.now() - faceVerifiedAt > 60 * 60 * 1000) {
-        const verifyFaceUrl = new URL('/verify-face', request.url);
-        verifyFaceUrl.searchParams.set('redirect', pathname);
-        verifyFaceUrl.searchParams.set('expired', 'true');
-        return NextResponse.redirect(verifyFaceUrl);
+    // The custom claim is the source of truth for expiry; the signed cookie only
+    // carries a 1h window, so an older claim can still be rejected here.
+    if (typeof faceVerifiedAt === 'number' && Date.now() - faceVerifiedAt > 60 * 60 * 1000) {
+      if (faceGrant.valid && faceGrant.expiresAt !== undefined && Date.now() <= faceGrant.expiresAt) {
+        return NextResponse.next();
       }
+      return redirectToVerifyFace(request, pathname, true);
     }
 
     return NextResponse.next();
   } catch (error) {
-    // Solo redirigir a login en errores de autenticación claros
-    // En errores de sistema (red, config, timeout) -> fail-open
-    console.warn('Middleware session verification error:', error);
-    
-    // Si el error indica sesión inválida, redirigir a login
-    if (error instanceof Error && (
-      error.message.includes('session') || 
-      error.message.includes('auth') ||
-      error.message.includes('token') ||
-      error.message.includes('unauthorized') ||
-      error.message.includes('expired')
-    )) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('__session');
-      return response;
+    console.warn('[middleware] session verification error:', error);
+
+    if (
+      error instanceof Error &&
+      (error.message.includes('session') ||
+        error.message.includes('auth') ||
+        error.message.includes('token') ||
+        error.message.includes('unauthorized') ||
+        error.message.includes('expired'))
+    ) {
+      return redirectToLogin(request);
     }
-    
-    // Errores de sistema (red, config, timeout) -> fail-open
-    console.warn('Middleware system error, failing open:', error);
+
+    // Infrastructure error: the signed requirement still gates 2FA members above,
+    // so failing open here no longer grants an unverified session.
     return NextResponse.next();
   }
 }

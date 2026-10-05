@@ -19,6 +19,7 @@ import { geocodeAddress } from '@/ai/flows/geocode-address-flow';
 import { auth, database } from '@/lib/firebase-config';
 import { onAuthStateChanged, User as FirebaseUser, updateProfile as updateAuthProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user';
+import { hasActiveMembership } from '@/lib/utils/membership';
 import { get, ref, update, onValue } from 'firebase/database';
 import { requestCamera, cameraErrorTitle, cameraErrorDescription } from '@/lib/client/camera';
 import type { CameraDiagnostics } from '@/lib/client/camera';
@@ -544,6 +545,14 @@ export default function SettingsPage() {
 
   const handle2FAToggle = async (enabled: boolean) => {
     if (!currentUser) return;
+    if (enabled && !hasActiveMembership(profile)) {
+      toast({
+        variant: 'destructive',
+        title: 'Membership Required',
+        description: 'You need an active membership to enable facial verification.',
+      });
+      return;
+    }
     setProfile(prev => ({...prev, twoFactorEnabled: enabled}));
 
     const userRef = ref(database, `users/${currentUser.uid}`);
