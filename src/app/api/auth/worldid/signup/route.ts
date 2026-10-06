@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from 'firebase-admin/database';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
-import { getAuth } from 'firebase-admin/auth';
-import { verifyWorldIdProof, linkWorldIdToUser, normalizeNullifier } from '@/lib/server/worldid';
+import { verifyWorldIdProof, normalizeNullifier } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +10,12 @@ export const runtime = 'nodejs';
  * ensure the nullifier isn't already linked, create the Firebase Auth user
  * (no password, email optional), write the initial profile, link the nullifier,
  * and return a custom token for immediate sign-in.
+ *
+ * Security fixes:
+ * 1. Anti-replay: verifyWorldIdProof now records the proof hash atomically.
+ * 2. emailVerified is always false - World ID proves humanity, NOT email ownership.
+ * 3. Anti-race-condition: nullifier claim uses a Firebase transaction so two
+ *    concurrent requests for the same World ID only one wins.
  */
 export async function POST(request: NextRequest): Promise<Response> {
   let idkitResponse: unknown;
@@ -22,9 +26,15 @@ export async function POST(request: NextRequest): Promise<Response> {
   let stylePreferences = '';
 
   try {
-    const body = (await request.json()) as { idkitResponse?: unknown; email?: string; role?: string; firstName?: string; lastName?: string; stylePreferences?: string };
+    const body = (await request.json()) as {
+      idkitResponse?: unknown;
+      email?: string;
+      role?: string;
+      firstName?: string;
+      lastName?: string;
+      stylePreferences?: string;
+    };
     idkitResponse = body.idkitResponse;
-    // Optional profile fields for initial profile creation
     email = body.email?.trim().toLowerCase() || null;
     role = body.role?.trim() || 'Client';
     firstName = body.firstName?.trim() || '';
@@ -44,8 +54,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Malformed request body.' }, { status: 400 });
   }
 
-  // Verify the World ID proof
-  const verification = await verifyWorldIdProof(idkitResponse as Parameters<typeof verifyWorldIdProof>[0]);
+  const db = getAdminDb();
+  const adminAuth = getAdminAuth();
+
+  // FIX 1: Pasamos db a verifyWorldIdProof para la protección anti-replay.
+  const verification = await verifyWorldIdProof(
+    idkitResponse as Parameters<typeof verifyWorldIdProof>[0],
+    db,
+  );
   if (!verification.ok) {
     return NextResponse.json(
       { error: verification.unavailable ? 'WORLDID_UNAVAILABLE' : 'WORLDID_REJECTED', detail: verification.error },
@@ -54,37 +70,51 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const nullifier = normalizeNullifier(verification.nullifier)!;
-  const db = getAdminDb();
-  const adminAuth = getAdminAuth();
 
-  // Check if nullifier already linked (should not happen for signup, but race condition)
-  const existingLink = await db.ref(`worldId_nullifiers/${nullifier}`).get();
-  if (existingLink.exists()) {
+  // FIX 3: Usamos una transacción atómica sobre el nullifier para evitar race conditions.
+  // Si dos peticiones llegan simultáneamente, solo una podrá crear la cuenta.
+  const nullifierRef = db.ref(`worldId_nullifiers/${nullifier}`);
+  let nullifierAlreadyExists = false;
+
+  const txResult = await nullifierRef.transaction((current) => {
+    if (current !== null) {
+      // Nullifier ya está tomado → abortar transacción
+      nullifierAlreadyExists = true;
+      return undefined;
+    }
+    // Reservar el nullifier de forma atómica con un placeholder
+    return { reservedAt: Date.now() };
+  });
+
+  if (nullifierAlreadyExists || !txResult.committed) {
     return NextResponse.json(
       { error: 'This World ID is already linked to an account. Please sign in instead.' },
       { status: 409 },
     );
   }
 
+  let uid: string | null = null;
+
   try {
-    // Create Firebase Auth user (no password, email optional)
+    // FIX 2: emailVerified es siempre false. World ID prueba que es humano, 
+    // NO que el usuario es dueño del correo. El usuario deberá verificar el 
+    // email por separado (Firebase Auth send verification link).
     const userRecord = await adminAuth.createUser({
       email: email || undefined,
-      emailVerified: !!email, // If email provided, treat as verified (World ID proves humanity)
-      displayName: null, // Will be set after profile creation
+      emailVerified: false,
+      displayName: undefined,
       disabled: false,
     });
 
-    const uid = userRecord.uid;
+    uid = userRecord.uid;
 
-    // Create initial profile in RTDB
+    // Generate username
     const { add } = await import('date-fns');
     const usernameBase = `${firstName.toLowerCase()}${lastName.toLowerCase()}`.replace(/[^a-z0-9]/g, '');
     let username = usernameBase;
-    const usernameRef = db.ref(`usernames/${usernameBase}`);
-    const usernameSnapshot = await usernameRef.get();
+    const usernameSnapshot = await db.ref(`usernames/${usernameBase}`).get();
     if (usernameSnapshot.exists()) {
-      username = `${usernameBase}${Math.floor(Math.random() * 1000)}`;
+      username = `${usernameBase}${Math.floor(Math.random() * 9000) + 1000}`;
     }
 
     let status: 'pending_payment' | 'active' = 'active';
@@ -99,10 +129,10 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const userData = {
       name: `${firstName} ${lastName}`,
-      username: username,
+      username,
       email: email || '',
-      role: role,
-      status: status,
+      role,
+      status,
       bio: '',
       avatarUrl: 'https://placehold.co/200x200.png',
       backgroundUrl: '',
@@ -116,18 +146,22 @@ export async function POST(request: NextRequest): Promise<Response> {
       collectionCount: 0,
       twoFactorEnabled: false,
       storageUsed: 0,
-      trialEndsAt: trialEndsAt,
+      trialEndsAt,
       artistRequestStatus: 'none',
       referralCodeUsed: false,
+      stylePreferences: stylePreferences || '',
+      worldIdVerified: true,
+      worldIdVerifiedAt: new Date().toISOString(),
       legal: {
         globalTerms: true,
         acceptedAt: new Date().toISOString(),
       },
-      authProviders: ['worldid'], // Track auth methods
+      authProviders: ['worldid'],
     };
 
-    // Atomic multi-path write: user profile + username map + worldId_nullifiers link
-    const updates: { [key: string]: any } = {};
+    // Atomic multi-path write: actualiza el nullifier reservado con el uid real,
+    // y escribe perfil + mapa de username en un solo update.
+    const updates: { [key: string]: unknown } = {};
     updates[`/users/${uid}`] = userData;
     updates[`/usernames/${username}`] = uid;
     updates[`/worldId_nullifiers/${nullifier}`] = { uid, verifiedAt: new Date().toISOString() };
@@ -140,6 +174,18 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ success: true, customToken, uid });
   } catch (error) {
     console.error('World ID signup error:', error);
+
+    // Rollback: Si falló después de reservar el nullifier, limpiarlo para que el 
+    // usuario pueda intentarlo de nuevo.
+    try {
+      await nullifierRef.remove();
+      if (uid) {
+        await adminAuth.deleteUser(uid);
+      }
+    } catch (rollbackError) {
+      console.error('World ID signup rollback error:', rollbackError);
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create account with World ID.' },
       { status: 500 },

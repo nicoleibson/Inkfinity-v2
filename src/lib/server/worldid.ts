@@ -108,7 +108,7 @@ export function normalizeNullifier(value: unknown): string | null {
  * 503 WORLDID_UNAVAILABLE so the caller fails closed instead of treating an
  * outage as a rejection.
  */
-export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<WorldIdVerifyResult> {
+export async function verifyWorldIdProof(idkitResponse: IdkitResult, db: Database): Promise<WorldIdVerifyResult> {
   const rpId = getWorldIdRpId();
   if (!rpId) {
     return {
@@ -123,11 +123,35 @@ export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<Wo
     return { ok: false, status: 400, error: 'Malformed IDKit result.' };
   }
 
+  // Prevenir Replay Attacks: Hashear la prueba completa para asegurar que no se haya enviado antes.
+  const { createHash } = await import('crypto');
+  const proofHash = createHash('sha256').update(JSON.stringify(idkitResponse)).digest('hex');
+  const usedProofRef = db.ref(`worldId_used_proofs/${proofHash}`);
+  
+  // Usamos una transacción para prevenir que dos llamadas simultáneas usen la misma prueba.
+  let isReplay = false;
+  await usedProofRef.transaction((current) => {
+    if (current) {
+      isReplay = true;
+      return undefined; // Abort
+    }
+    return Date.now();
+  });
+
+  if (isReplay) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Replay attack detected: This proof has already been used.',
+    };
+  }
+
   // Reject simulator proofs on a production deployment (and vice versa) before
   // spending a verifier call. The cloud verifier is still the final authority.
   const expectedEnvironment = getWorldIdEnvironment();
   const claimedEnvironment = typeof idkitResponse.environment === 'string' ? idkitResponse.environment : null;
   if (claimedEnvironment && claimedEnvironment !== expectedEnvironment) {
+    await usedProofRef.remove(); // Revert on early fail
     return {
       ok: false,
       status: 400,
@@ -145,6 +169,7 @@ export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<Wo
       cache: 'no-store',
     });
   } catch {
+    await usedProofRef.remove();
     return { ok: false, status: 503, error: 'WORLDID_UNAVAILABLE', unavailable: true };
   }
 
@@ -157,10 +182,12 @@ export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<Wo
 
   // "Could not verify" must never be reported as a definitive rejection.
   if (response.status >= 500 || response.status === 404 || response.status === 429) {
+    await usedProofRef.remove();
     return { ok: false, status: 503, error: 'WORLDID_UNAVAILABLE', unavailable: true };
   }
 
   if (!response.ok || !payload?.success) {
+    await usedProofRef.remove();
     return {
       ok: false,
       status: 400,
@@ -178,6 +205,7 @@ export async function verifyWorldIdProof(idkitResponse: IdkitResult): Promise<Wo
 
   const nullifier = normalizeNullifier(candidate);
   if (!nullifier) {
+    await usedProofRef.remove();
     return { ok: false, status: 400, error: 'World ID proof did not include a uniqueness nullifier.' };
   }
 

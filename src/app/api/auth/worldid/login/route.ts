@@ -25,8 +25,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Malformed request body.' }, { status: 400 });
   }
 
+  const db = getAdminDb();
+  const adminAuth = getAdminAuth();
+
   // Verify the World ID proof
-  const verification = await verifyWorldIdProof(idkitResponse as Parameters<typeof verifyWorldIdProof>[0]);
+  const verification = await verifyWorldIdProof(idkitResponse as Parameters<typeof verifyWorldIdProof>[0], db);
   if (!verification.ok) {
     return NextResponse.json(
       { error: verification.unavailable ? 'WORLDID_UNAVAILABLE' : 'WORLDID_REJECTED', detail: verification.error },
@@ -35,8 +38,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const nullifier = normalizeNullifier(verification.nullifier)!;
-  const db = getAdminDb();
-  const adminAuth = getAdminAuth();
 
   // Look up the nullifier in the index
   const linkSnap = await db.ref(`worldId_nullifiers/${nullifier}`).get();

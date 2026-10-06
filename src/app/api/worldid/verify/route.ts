@@ -28,8 +28,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Malformed request body.' }, { status: 400 });
   }
 
+  const db = getAdminDb();
+
   const verification = await verifyWorldIdProof(
     idkitResponse as Parameters<typeof verifyWorldIdProof>[0],
+    db,
   );
 
   if (!verification.ok) {
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const link = await linkWorldIdToUser(getAdminDb(), auth.user.uid, verification.nullifier);
+  const link = await linkWorldIdToUser(db, auth.user.uid, verification.nullifier);
   if (!link.ok) {
     return NextResponse.json({ error: link.error }, { status: link.status });
   }
