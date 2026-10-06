@@ -68,3 +68,11 @@ Si vas a desarrollar o modificar características en este proyecto, DEBES adheri
 
 ---
 *Documento autogenerado para el contexto de Agentes de Programación de IA en el entorno Google AI Studio.*
+
+## 7. Seguridad de Verificación Facial (2FA) — Actualización
+
+- **Enforcement con HMAC firmado**: Las cookies `face_req_signed` y `face_verified_signed` (httpOnly) se firman con `FACE_VERIFICATION_SECRET` (HMAC-SHA256 vía Web Crypto, compatible con Edge Runtime). El grant sólo se emite tras volver a ejecutar la comparación facial en servidor (`/api/auth/face-verified`) contra el scan registrado en la base de datos.
+- **Fail-safe ante outages**: `/api/auth/verify-session` devuelve 503 (no 401) ante fallos de infraestructura; el middleware sigue aplicando el requisito firmado, evitando expulsar usuarios por caídas temporales.
+- **Gated por membresía activa**: La verificación facial solo se exige/permite para usuarios con membresía paga activa (`src/lib/utils/membership.ts`). Se comprueba en middleware, en el endpoint de grant y en ajustes.
+- **Logout**: `POST /api/auth/logout` borra las cookies firmadas httpOnly.
+- **Variable requerida**: `FACE_VERIFICATION_SECRET` debe existir en Vercel (Production/Preview) y `.env.local`. En producción el código lanza error si falta para no firmar con clave insegura.
