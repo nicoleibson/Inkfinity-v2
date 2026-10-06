@@ -37,19 +37,31 @@ export function getWorldAppProviderOrNull() {
 }
 
 /**
- * Pays the recipient `to` a native amount (WLD on World Chain) via the World
+ * WLD Token Contract Address on World Chain Mainnet
+ */
+export const WLD_CONTRACT_ADDRESS = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
+
+/**
+ * Pays the recipient `to` in WLD tokens on World Chain via the World
  * App bridge. Only valid inside World App.
  */
 export async function sendWorldAppTransaction(params: {
   to: string;
   valueWei: bigint;
 }): Promise<SendTransactionResult> {
+  // ERC-20 transfer(address to, uint256 amount)
+  // Selector: 0xa9059cbb
+  const cleanTo = params.to.replace('0x', '').padStart(64, '0');
+  const cleanValue = params.valueWei.toString(16).padStart(64, '0');
+  const data = `0xa9059cbb${cleanTo}${cleanValue}`;
+
   const result = await MiniKit.sendTransaction({
     chainId: WORLD_CHAIN_ID,
     transactions: [
       {
-        to: params.to as `0x${string}`,
-        value: `0x${params.valueWei.toString(16)}`,
+        to: WLD_CONTRACT_ADDRESS,
+        data: data,
+        value: '0x0', // 0 ETH since we are sending WLD ERC-20
       },
     ],
   });

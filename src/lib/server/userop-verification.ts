@@ -1,9 +1,8 @@
 import 'server-only';
 
-import { JsonRpcProvider, keccak256 } from 'ethers';
+import { JsonRpcProvider } from 'ethers';
 import {
   readUserOperationEvent,
-  recomputeUserOpHash,
   type UserOperationEventMatch,
 } from '@/lib/userop-encoding';
 
@@ -120,75 +119,7 @@ export async function pollUserOpUntilTerminal(
   }
 }
 
-type BundlerUserOp = {
-  sender: string;
-  nonce: bigint;
-  initCode: string;
-  callData: string;
-  callGasLimit: bigint;
-  verificationGasLimit: bigint;
-  preVerificationGas: bigint;
-  maxFeePerGas: bigint;
-  maxPriorityFeePerGas: bigint;
-  paymasterAndData: string;
-  to: string | null;
-  value: bigint;
-};
 
-async function fetchUserOpFromBundler(
-  bundlerUrl: string,
-  userOpHash: string,
-): Promise<BundlerUserOp | null> {
-  let op: Record<string, string>;
-  try {
-    const res = await fetch(bundlerUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_getUserOperationByHash',
-        params: [userOpHash],
-      }),
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { result?: Record<string, string> | null };
-    if (!json?.result || typeof json.result !== 'object') return null;
-    op = json.result;
-  } catch {
-    return null;
-  }
-
-  const asBigInt = (key: string, fallback = BigInt(0)) => {
-    const value = op[key];
-    if (typeof value !== 'string') return fallback;
-    try {
-      return BigInt(value);
-    } catch {
-      return fallback;
-    }
-  };
-
-  return {
-    sender: typeof op.sender === 'string' ? op.sender : '',
-    nonce: asBigInt('nonce'),
-    initCode: typeof op.initCode === 'string' ? op.initCode : '0x',
-    callData: typeof op.callData === 'string' ? op.callData : '0x',
-    callGasLimit: asBigInt('callGasLimit'),
-    verificationGasLimit: asBigInt('verificationGasLimit'),
-    preVerificationGas: asBigInt('preVerificationGas'),
-    maxFeePerGas: asBigInt('maxFeePerGas'),
-    maxPriorityFeePerGas: asBigInt('maxPriorityFeePerGas'),
-    paymasterAndData: typeof op.paymasterAndData === 'string' ? op.paymasterAndData : '0x',
-    to: typeof op.to === 'string' ? op.to : null,
-    value: asBigInt('value'),
-  };
-}
-
-function sameAddress(a: string | null | undefined, b: string): boolean {
-  return typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
-}
 
 /**
  * Full verification of a World App payment.
@@ -275,85 +206,38 @@ export async function verifyUserOpPayment(params: {
   }
 
   const sender = match.event.sender;
+  const treasury = params.treasuryAddress || expectedTo;
 
-  let to: string | null = null;
-  let valueWei: bigint | null = null;
-  let exactRecipientVerified = false;
+  // WLD Token Address on World Chain Mainnet
+  const WLD_CONTRACT_ADDRESS = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
+  // Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
+  const TRANSFER_TOPIC_0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
-  // (2) Exact recipient/amount via bundler, bound to the claimed hash.
-  if (params.bundlerUrl) {
-    const op = await fetchUserOpFromBundler(params.bundlerUrl, userOpHash);
-    if (!op) {
-      return {
-        ok: false,
-        status: 502,
-        code: 'USEROP_UNVERIFIABLE',
-        error: 'The configured bundler RPC could not return the user operation.',
-      };
+  // Analizar todos los logs emitidos en esta transacción buscando transferencias del token WLD
+  // desde el Smart Wallet del usuario hacia nuestra tesorería.
+  let transferredWei = BigInt(0);
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== WLD_CONTRACT_ADDRESS.toLowerCase()) continue;
+    if (log.topics.length < 3) continue;
+    if (log.topics[0] !== TRANSFER_TOPIC_0) continue;
+
+    // Los temas indexados tienen 32 bytes (64 caracteres + '0x'). Extraemos los últimos 40 caracteres (20 bytes).
+    const fromTopic = '0x' + log.topics[1].slice(26).toLowerCase();
+    const toTopic = '0x' + log.topics[2].slice(26).toLowerCase();
+
+    if (fromTopic === sender.toLowerCase() && toTopic === treasury.toLowerCase()) {
+      transferredWei += BigInt(log.data);
     }
-
-    const recomputed = recomputeUserOpHash({ entryPoint: match.entryPoint, ...op });
-    if (!recomputed || recomputed.toLowerCase() !== userOpHash.toLowerCase()) {
-      return {
-        ok: false,
-        status: 422,
-        code: 'USEROP_UNVERIFIABLE',
-        error: 'The user operation reported by the bundler does not match the claimed hash.',
-      };
-    }
-    if (!sameAddress(op.sender, sender)) {
-      return {
-        ok: false,
-        status: 422,
-        code: 'USEROP_UNVERIFIABLE',
-        error: 'The user operation sender does not match the on-chain event.',
-      };
-    }
-
-    to = op.to;
-    valueWei = op.value;
-    exactRecipientVerified = true;
   }
 
-  // (3) Recipient/amount assertions.
-  if (exactRecipientVerified) {
-    if (!sameAddress(to, expectedTo)) {
-      return {
-        ok: false,
-        status: 422,
-        code: 'WRONG_RECIPIENT',
-        error: 'The user operation paid an address other than the platform treasury.',
-      };
-    }
-    if ((valueWei as bigint) < minValueWei) {
-      return {
-        ok: false,
-        status: 422,
-        code: 'INSUFFICIENT_VALUE',
-        error: 'The user operation transferred less than the required amount.',
-      };
-    }
-  } else {
-    // No bundler configured: require the treasury to have received at least the fee
-    // within the settling block. Conservative, but it cannot be satisfied without the
-    // funds actually arriving.
-    const treasury = params.treasuryAddress || expectedTo;
-    const blockNumber = receipt.blockNumber;
-
-    const [before, after] = await Promise.all([
-      provider.getBalance(treasury, blockNumber - 1),
-      provider.getBalance(treasury, blockNumber),
-    ]);
-
-    if (after - before < minValueWei) {
-      return {
-        ok: false,
-        status: 422,
-        code: 'INSUFFICIENT_VALUE',
-        error:
-          'The recipient did not receive the required amount in the settling block. Configure RPC_WORLDCHAIN_BUNDLER_URL to verify user operations exactly.',
-      };
-    }
+  if (transferredWei < minValueWei) {
+    return {
+      ok: false,
+      status: 422,
+      code: 'INSUFFICIENT_VALUE',
+      error: 'The user operation did not transfer the required amount of WLD tokens.',
+    };
   }
 
   return {
@@ -362,9 +246,9 @@ export async function verifyUserOpPayment(params: {
       transactionHash,
       sender,
       entryPoint: match.entryPoint,
-      to,
-      valueWei,
-      exactRecipientVerified,
+      to: treasury,
+      valueWei: transferredWei,
+      exactRecipientVerified: true,
     },
   };
 }
