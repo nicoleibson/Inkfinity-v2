@@ -8,6 +8,7 @@ import { Loader2, Camera, ShieldCheck, ShieldX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
 import { auth, database } from '@/lib/firebase-config';
+import { onAuthStateChanged } from 'firebase/auth';
 import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
 import { requestCamera, cameraErrorTitle, cameraErrorDescription } from '@/lib/client/camera';
 import type { CameraDiagnostics } from '@/lib/client/camera';
@@ -80,9 +81,18 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
 
   useEffect(() => {
     startCamera();
-    
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userRef = ref(database, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+        if (snapshot.exists()) {
+          setProfile(snapshot.val());
+        }
+      }
+    });
     return () => {
       stopCamera();
+      unsubscribe();
     };
   }, [startCamera, stopCamera]);
 
