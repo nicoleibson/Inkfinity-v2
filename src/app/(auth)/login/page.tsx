@@ -57,7 +57,6 @@ export default function LoginPage() {
 
       if (!snapshot.exists()) {
         toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
-        setLoading(false);
         router.push('/signup');
         return;
       }
@@ -68,13 +67,11 @@ export default function LoginPage() {
       const isTrialExpired = profile.role === 'Tattoo Artist' && profile.trialEndsAt && new Date() > new Date(profile.trialEndsAt);
       if (isTrialExpired && profile.status !== 'pending_payment') {
         await update(userRef, { status: 'pending_payment' });
-        setLoading(false);
         router.push('/payment');
         return;
       }
 
       if (profile.status === 'pending_payment') {
-        setLoading(false);
         router.push('/payment');
         return;
       }
@@ -83,11 +80,9 @@ export default function LoginPage() {
       // membership, so it must not be requested from anyone else here: the
       // verify-face page would reject them and bounce them back.
       if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
-        setLoading(false);
         router.push('/verify-face');
       } else {
         toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
-        setLoading(false);
         router.push("/");
       }
     } catch (err: any) {
