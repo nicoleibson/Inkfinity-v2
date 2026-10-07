@@ -87,7 +87,6 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error('completeLogin error:', err);
-      setError(err.message || 'Login failed');
       setLoading(false);
     }
   };
