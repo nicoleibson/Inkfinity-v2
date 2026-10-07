@@ -77,8 +77,8 @@ export const metadata: Metadata = {
     title: "Inkfinity",
   },
   icons: {
-    icon: '/favicon.ico',
-    apple: '/icon-192x192.png',
+    icon: '/logo.png',
+    apple: '/logo.png',
   },
   alternates: {
     canonical: process.env.NEXT_PUBLIC_SITE_URL || "https://inkfinity-ten.vercel.app",

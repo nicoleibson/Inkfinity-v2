@@ -8,7 +8,7 @@ export function JsonLd() {
     '@type': 'Organization',
     name: 'Inkfinity',
     url: baseUrl,
-    logo: `${baseUrl}/icon-512x512.png`,
+    logo: `${baseUrl}/logo.png`,
     description: 'Plataforma marketplace y comunidad para artistas del tatuaje',
     sameAs: [],
   }
