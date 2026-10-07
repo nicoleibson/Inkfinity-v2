@@ -57,7 +57,8 @@ export default function LoginPage() {
 
       if (!snapshot.exists()) {
         toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
-        router.push('/signup');
+        setLoading(false);
+        setTimeout(() => router.push('/signup'), 0);
         return;
       }
 
@@ -67,12 +68,14 @@ export default function LoginPage() {
       const isTrialExpired = profile.role === 'Tattoo Artist' && profile.trialEndsAt && new Date() > new Date(profile.trialEndsAt);
       if (isTrialExpired && profile.status !== 'pending_payment') {
         await update(userRef, { status: 'pending_payment' });
-        router.push('/payment');
+        setLoading(false);
+        setTimeout(() => router.push('/payment'), 0);
         return;
       }
 
       if (profile.status === 'pending_payment') {
-        router.push('/payment');
+        setLoading(false);
+        setTimeout(() => router.push('/payment'), 0);
         return;
       }
 
@@ -80,19 +83,23 @@ export default function LoginPage() {
       // membership, so it must not be requested from anyone else here: the
       // verify-face page would reject them and bounce them back.
       if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
-        router.push('/verify-face');
+        setLoading(false);
+        setTimeout(() => router.push('/verify-face'), 0);
       } else {
         toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
-        router.push("/");
+        setLoading(false);
+        setTimeout(() => router.push("/"), 0);
       }
     } catch (err: any) {
       console.error('completeLogin error:', err);
       setLoading(false);
       // Fallback: if Firebase auth succeeded but session setup failed,
       // still try to navigate to home as client-side auth is active
-      try {
-        router.push('/');
-      } catch {}
+      setTimeout(() => {
+        try {
+          router.push('/');
+        } catch {}
+      }, 0);
     }
   };
 
