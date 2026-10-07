@@ -47,10 +47,10 @@ export default function LoginPage() {
   };
 
   const completeLogin = async (user: any) => {
-    try {
-      // Create session cookie for middleware
-      await createSessionCookie(user);
+    // Start session creation in background (don't block navigation)
+    createSessionCookie(user).catch(() => {});
 
+    try {
       // Check user profile for status and 2FA
       const userRef = ref(database, `users/${user.uid}`);
       const snapshot = await get(userRef);
@@ -93,8 +93,6 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('completeLogin error:', err);
       setLoading(false);
-      // Fallback: if Firebase auth succeeded but session setup failed,
-      // still try to navigate to home as client-side auth is active
       setTimeout(() => {
         try {
           router.replace('/');
