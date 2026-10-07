@@ -88,6 +88,11 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('completeLogin error:', err);
       setLoading(false);
+      // Fallback: if Firebase auth succeeded but session setup failed,
+      // still try to navigate to home as client-side auth is active
+      try {
+        router.push('/');
+      } catch {}
     }
   };
 
