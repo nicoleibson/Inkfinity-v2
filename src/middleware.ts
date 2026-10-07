@@ -75,10 +75,14 @@ export async function middleware(request: NextRequest) {
     }
 
     const verifyUrl = new URL('/api/auth/verify-session', request.url);
-    verifyUrl.searchParams.set('session', sessionCookie);
 
     const response = await fetch(verifyUrl.toString(), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // FIX 3: Pasar la sesión como header en vez de query param para evitar
+        // que el JWT quede expuesto en logs de Vercel, CDN o proxies intermedios.
+        'Authorization': `Bearer ${sessionCookie}`,
+      },
       signal: AbortSignal.timeout(5000),
     });
 

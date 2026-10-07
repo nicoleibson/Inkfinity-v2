@@ -16,7 +16,14 @@ function isTokenRejection(error: unknown): boolean {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  const sessionCookie = request.nextUrl.searchParams.get('session');
+  // FIX 3: Leer la sesión del header Authorization (Bearer token) en vez del
+  // query param para evitar que el JWT quede expuesto en logs de servidor/CDN.
+  const authHeader = request.headers.get('Authorization');
+  const sessionCookie =
+    authHeader?.startsWith('Bearer ') ? authHeader.slice(7) :
+    // Fallback al query param por compatibilidad durante la transición
+    request.nextUrl.searchParams.get('session');
+
   if (!sessionCookie) {
     return NextResponse.json({ error: 'No session cookie' }, { status: 400 });
   }
