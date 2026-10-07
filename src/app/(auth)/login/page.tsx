@@ -58,7 +58,7 @@ export default function LoginPage() {
       if (!snapshot.exists()) {
         toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
         setLoading(false);
-        setTimeout(() => router.push('/signup'), 0);
+        setTimeout(() => router.replace('/signup'), 0);
         return;
       }
 
@@ -69,13 +69,13 @@ export default function LoginPage() {
       if (isTrialExpired && profile.status !== 'pending_payment') {
         await update(userRef, { status: 'pending_payment' });
         setLoading(false);
-        setTimeout(() => router.push('/payment'), 0);
+        setTimeout(() => router.replace('/payment'), 0);
         return;
       }
 
       if (profile.status === 'pending_payment') {
         setLoading(false);
-        setTimeout(() => router.push('/payment'), 0);
+        setTimeout(() => router.replace('/payment'), 0);
         return;
       }
 
@@ -84,11 +84,11 @@ export default function LoginPage() {
       // verify-face page would reject them and bounce them back.
       if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
         setLoading(false);
-        setTimeout(() => router.push('/verify-face'), 0);
+        setTimeout(() => router.replace('/verify-face'), 0);
       } else {
         toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
         setLoading(false);
-        setTimeout(() => router.push("/"), 0);
+        setTimeout(() => router.replace("/"), 0);
       }
     } catch (err: any) {
       console.error('completeLogin error:', err);
@@ -97,7 +97,7 @@ export default function LoginPage() {
       // still try to navigate to home as client-side auth is active
       setTimeout(() => {
         try {
-          router.push('/');
+          router.replace('/');
         } catch {}
       }, 0);
     }
