@@ -47,42 +47,48 @@ export default function LoginPage() {
   };
 
   const completeLogin = async (user: any) => {
-    // Create session cookie for middleware
-    await createSessionCookie(user);
+    try {
+      // Create session cookie for middleware
+      await createSessionCookie(user);
 
-    // Check user profile for status and 2FA
-    const userRef = ref(database, `users/${user.uid}`);
-    const snapshot = await get(userRef);
+      // Check user profile for status and 2FA
+      const userRef = ref(database, `users/${user.uid}`);
+      const snapshot = await get(userRef);
 
-    if (!snapshot.exists()) {
-      toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
-      router.push('/signup');
-      return;
-    }
+      if (!snapshot.exists()) {
+        toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
+        router.push('/signup');
+        return;
+      }
 
-    const profile: UserProfile = snapshot.val();
+      const profile: UserProfile = snapshot.val();
 
-    // Check for expired artist trial or pending payment status first
-    const isTrialExpired = profile.role === 'Tattoo Artist' && profile.trialEndsAt && new Date() > new Date(profile.trialEndsAt);
-    if (isTrialExpired && profile.status !== 'pending_payment') {
-      await update(userRef, { status: 'pending_payment' });
-      router.push('/payment');
-      return;
-    }
+      // Check for expired artist trial or pending payment status first
+      const isTrialExpired = profile.role === 'Tattoo Artist' && profile.trialEndsAt && new Date() > new Date(profile.trialEndsAt);
+      if (isTrialExpired && profile.status !== 'pending_payment') {
+        await update(userRef, { status: 'pending_payment' });
+        router.push('/payment');
+        return;
+      }
 
-    if (profile.status === 'pending_payment') {
-      router.push('/payment');
-      return;
-    }
+      if (profile.status === 'pending_payment') {
+        router.push('/payment');
+        return;
+      }
 
-    // Facial verification is only enforced for members with an active paid
-    // membership, so it must not be requested from anyone else here: the
-    // verify-face page would reject them and bounce them back.
-    if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
-      router.push('/verify-face');
-    } else {
-      toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
-      router.push("/");
+      // Facial verification is only enforced for members with an active paid
+      // membership, so it must not be requested from anyone else here: the
+      // verify-face page would reject them and bounce them back.
+      if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
+        router.push('/verify-face');
+      } else {
+        toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
+        router.push("/");
+      }
+    } catch (err: any) {
+      console.error('completeLogin error:', err);
+      setError(err.message || 'Login failed');
+      setLoading(false);
     }
   };
 
