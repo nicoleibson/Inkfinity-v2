@@ -86,7 +86,15 @@ export default function LoginPage() {
         setLoading(false);
         setTimeout(() => router.replace('/verify-face'), 0);
       } else {
-        toast({ title: "Login Successful", description: "Welcome back to Inkfinity!" });
+        // Si el usuario tiene 2FA habilitado pero no tiene facialScanUrl registrado
+        // y tiene membresía activa, sugerir registrarse ahora
+        const has2FANoScan = profile?.twoFactorEnabled === true && !profile.facialScanUrl && hasActiveMembership(profile);
+        const baseMessage = "Welcome back to Inkfinity!";
+        let message = baseMessage;
+        if (has2FANoScan) {
+          message = "¡Bienvenido de nuevo a Inkfinity! Para continuar, completa tu verificación facial en la configuración.";
+        }
+        toast({ title: "Login Successful", description: message });
         setLoading(false);
         setTimeout(() => router.replace("/"), 0);
       }

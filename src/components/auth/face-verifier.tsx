@@ -260,6 +260,14 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         <canvas ref={canvasRef} className="hidden" />
       </div>
       
+      {hasCameraPermission === true && !profile.facialScanUrl && (
+        <Alert variant="destructive">
+          <AlertTitle>No Face Registered</AlertTitle>
+          <AlertDescription>It looks like you haven't registered a facial scan yet. You can <a href="/settings" className="underline">register one in settings</a>, or use the email verification link below.
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex flex-col sm:flex-row gap-2">
         <Button onClick={captureAndProcessFace} disabled={!hasCameraPermission || isProcessingFace || !profile.facialScanUrl || !streamRef.current} className="w-full">
           {isProcessingFace ? <Loader2 className="animate-spin mr-2" /> : <Camera className="mr-2"/>}
