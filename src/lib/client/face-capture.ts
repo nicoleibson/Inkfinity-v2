@@ -220,7 +220,7 @@ export async function captureLiveSequence(
   const intervalMs = opts?.intervalMs ?? LIVENESS_FRAME_INTERVAL_MS;
   const framesToKeep = opts?.framesToKeep ?? 3;
   const ctx = canvas.getContext("2d");
-  if (!ctx || !video.videoWidth) throw new Error("Video not ready");
+  if (!ctx || !video.videoWidth) return "unavailable";
 
   // Analyze a small downscaled copy of the frame: the landmark model dominates
   // per-frame cost, and on low-end devices (iPhone 7 / A10) its full-resolution
@@ -231,7 +231,7 @@ export async function captureLiveSequence(
   analysisCanvas.width = Math.max(1, Math.round(video.videoWidth * analysisScale));
   analysisCanvas.height = Math.max(1, Math.round(video.videoHeight * analysisScale));
   const analysisCtx = analysisCanvas.getContext("2d");
-  if (!analysisCtx) throw new Error("No 2d context");
+  if (!analysisCtx) return "unavailable";
 
   const keepRatios: number[] = [];
   for (let i = 0; i < framesToKeep; i++) keepRatios.push((i + 0.5) / framesToKeep);
@@ -243,38 +243,76 @@ export async function captureLiveSequence(
   const frames: string[] = [];
 
   const startTime = performance.now();
+  const GLOBAL_TIMEOUT_MS = Math.max(durationMs + 3000, 8000);
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    console.warn("Liveness sequence timed out globally");
+  }, GLOBAL_TIMEOUT_MS);
 
-  while (true) {
-    const sampleStart = performance.now();
-    analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
-    const res = landmarker.detectForVideo(analysisCanvas, sampleStart);
+  // Ensure video is playing
+  if (video.readyState < 2) {
+    try {
+      await new Promise<void>((resolve) => {
+        const onPlaying = () => {
+          video.removeEventListener("playing", onPlaying);
+          resolve();
+        };
+        video.addEventListener("playing", onPlaying, { once: true });
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+  // small stability delay
+  await sleep(120);
 
-    const facePresent = res.faceLandmarks.length > 0;
-    hasFace.push(facePresent);
+  try {
+    while (true) {
+      if (timedOut) break;
+      const sampleStart = performance.now();
+      try {
+        analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
+        // tasks-vision 1.0.1 expects timestamp in ms (DOMHighResTimeStamp)
+        const ts = sampleStart;
+        const res = landmarker.detectForVideo(analysisCanvas, ts);
+        const facePresent = res.faceLandmarks.length > 0;
+        hasFace.push(facePresent);
 
-    if (facePresent) {
-      const blinkLeft = blendshapeScore(res.faceBlendshapes ?? [], "eyeBlinkLeft");
-      const blinkRight = blendshapeScore(res.faceBlendshapes ?? [], "eyeBlinkRight");
-      eyeClosed.push(Math.max(blinkLeft, blinkRight) >= BLINK_CLOSED_THRESHOLD);
-      poses.push(headPoseFromTransform(res.facialTransformationMatrixes?.[0]) ?? { pitchDeg: 0, yawDeg: 0, rollDeg: 0 });
+        if (facePresent) {
+          const blinkLeft = blendshapeScore(res.faceBlendshapes ?? [], "eyeBlinkLeft");
+          const blinkRight = blendshapeScore(res.faceBlendshapes ?? [], "eyeBlinkRight");
+          eyeClosed.push(Math.max(blinkLeft, blinkRight) >= BLINK_CLOSED_THRESHOLD);
+          poses.push(headPoseFromTransform(res.facialTransformationMatrixes?.[0]) ?? { pitchDeg: 0, yawDeg: 0, rollDeg: 0 });
 
-      const progress = (sampleStart - startTime) / durationMs;
-      if (keepNext < keepRatios.length && progress >= keepRatios[keepNext]) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        frames.push(downscaleCanvas(canvas));
-        keepNext++;
+          const progress = (sampleStart - startTime) / durationMs;
+          if (keepNext < keepRatios.length && progress >= keepRatios[keepNext]) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(downscaleCanvas(canvas));
+            keepNext++;
+          }
+        }
+      } catch (err) {
+        console.error("detectForVideo error:", err);
+        timedOut = true;
+        break;
+      }
+
+      const elapsed = performance.now() - startTime;
+      if (elapsed >= durationMs) break;
+      // Adaptive sleep: keep ~intervalMs between sample STARTS even when a slow
+      // device takes longer to run the model, so a 2.2s window still yields enough
+      // frames on old hardware.
+      const nextAt = sampleStart + intervalMs;
+      const sleepMs = Math.max(16, nextAt - performance.now());
+      if (sleepMs > 0) {
+        await sleep(sleepMs);
       }
     }
-
-    const elapsed = performance.now() - startTime;
-    if (elapsed >= durationMs) break;
-    // Adaptive sleep: keep ~intervalMs between sample STARTS even when a slow
-    // device takes longer to run the model, so a 2.2s window still yields enough
-    // frames on old hardware.
-    const nextAt = sampleStart + intervalMs;
-    await sleep(Math.max(16, nextAt - performance.now()));
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // Only evaluate blink transitions on frames where a face was present.

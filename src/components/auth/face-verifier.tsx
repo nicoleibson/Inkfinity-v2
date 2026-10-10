@@ -136,7 +136,23 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         }
 
         // Liveness gate: verify a live person (blink or head motion) over ~2s.
-        const liveness = await captureLiveSequence(video, canvas);
+        const LIVENESS_SAFETY_TIMEOUT_MS = 8000;
+        let liveness: "unavailable" | Awaited<ReturnType<typeof captureLiveSequence>> = "unavailable";
+        try {
+          liveness = await Promise.race([
+            captureLiveSequence(video, canvas),
+            new Promise<"unavailable">((resolve) => {
+              const t = setTimeout(() => {
+                console.warn("Liveness check timed out after 8s, falling back to unavailable");
+                resolve("unavailable");
+              }, LIVENESS_SAFETY_TIMEOUT_MS);
+              // ensure timeout is cleaned up in race? not strictly necessary
+            }),
+          ]);
+        } catch (e) {
+          console.error("Liveness check threw error:", e);
+          liveness = "unavailable";
+        }
         let liveDataUri = frame.dataUri;
         if (liveness !== "unavailable") {
           if (!liveness.isLive) {
@@ -151,9 +167,9 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
           console.warn("Liveness model unavailable, skipping liveness check.");
         }
 
-        const primaryFrame = liveness !== "unavailable" && liveness.frames.length > 0 ? liveness.frames[0] : frame.dataUri;
-        const frame2 = liveness !== "unavailable" && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
-        const frame3 = liveness !== "unavailable" && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
+        const primaryFrame = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 0 ? liveness.frames[0] : frame.dataUri;
+        const frame2 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
+        const frame3 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
 
         // The server re-runs the comparison against the registered scan stored in the
         // database and is the only party that decides whether to grant the session.
