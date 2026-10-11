@@ -16,7 +16,11 @@ async function getFaceDetector(): Promise<FaceDetector | null> {
     detectorPromise = (async () => {
       try {
         const { FilesetResolver, FaceDetector } = await import("@mediapipe/tasks-vision");
+        console.log("Loading MediaPipe WASM from:", WASM_BASE);
+        console.log("Loading MediaPipe WASM for landmarker from:", WASM_BASE);
         const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
+        console.log("MediaPipe vision initialized for landmarker");
+        console.log("MediaPipe vision initialized successfully");
 
         try {
           return await FaceDetector.createFromOptions(vision, {
@@ -126,7 +130,11 @@ async function getFaceLandmarker(): Promise<FaceLandmarker | null> {
     landmarkerPromise = (async () => {
       try {
         const { FilesetResolver, FaceLandmarker } = await import("@mediapipe/tasks-vision");
+        console.log("Loading MediaPipe WASM from:", WASM_BASE);
+        console.log("Loading MediaPipe WASM for landmarker from:", WASM_BASE);
         const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
+        console.log("MediaPipe vision initialized for landmarker");
+        console.log("MediaPipe vision initialized successfully");
         const landmarkerOptions = {
           runningMode: "VIDEO" as const,
           numFaces: 1,
