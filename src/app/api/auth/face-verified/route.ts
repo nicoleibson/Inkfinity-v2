@@ -77,6 +77,12 @@ const ALLOWED_SCAN_HOSTNAMES = [
 ];
 
 function isSafeScanUrl(url: string): boolean {
+  if (!url) return false;
+  // Allow data URIs (client-side stored images)
+  if (url.startsWith('data:image/')) {
+    // Basic validation - ensure it's base64 encoded
+    return /data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(url);
+  }
   try {
     const parsed = new URL(url);
     // Solo HTTPS en producción
