@@ -180,21 +180,27 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
           body: JSON.stringify({ frame1: primaryFrame, frame2, frame3 }),
         });
 
-        const grant = (await grantResponse.json().catch(() => ({}))) as {
+        const grant = (await grantResponse.json().catch((e) => {
+          console.error("Failed to parse grant response:", e);
+          return {};
+        })) as {
           success?: boolean;
           confidence?: number;
           reason?: string;
+          error?: string;
+          isMatch?: boolean;
         };
+        console.log("Face verification API response:", { status: grantResponse.status, ok: grantResponse.ok, grant });
 
         const confidence = grant.confidence ?? 0;
         const confidencePercent = Math.round(confidence * 100);
         setVerificationResult({
-          isMatch: grant.success === true,
+          isMatch: grant.success === true || grant.isMatch === true,
           confidence,
-          reason: grant.reason ?? 'Verification could not be completed.',
+          reason: grant.reason ?? grant.error ?? 'Verification could not be completed.',
         });
 
-        if (grantResponse.ok && grant.success === true) {
+        if (grantResponse.ok && (grant.success === true || grant.isMatch === true)) {
             await resetVerificationFailures(uid);
             toast({
                 title: 'Verification Successful',
@@ -205,8 +211,8 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
             await registerVerificationFailure(uid);
             toast({
                 variant: 'destructive',
-                title: 'Verification Failed',
-                description: `${grant.reason ?? 'Identity could not be confirmed.'}${grantResponse.status === 403 ? ' An active membership is required.' : ''}`,
+                title: `Verification Failed (${grantResponse.status})`,
+                description: `${grant.reason ?? grant.error ?? 'Identity could not be confirmed.'}${grantResponse.status === 403 ? ' An active membership is required.' : ''}${grantResponse.status === 401 ? ' (confidence may be below threshold or no match)' : ''}${grantResponse.status === 502 ? ' (infrastructure/model error)' : ''}`,
             });
             onVerificationFail?.();
         }

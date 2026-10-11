@@ -268,15 +268,29 @@ export async function captureLiveSequence(
   await sleep(120);
 
   try {
+    let attempts = 0;
+    const maxAttemptsBeforeFailFast = 2;
     while (true) {
       if (timedOut) break;
       const sampleStart = performance.now();
       try {
         analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
-        // tasks-vision 1.0.1 expects timestamp in ms (DOMHighResTimeStamp)
         const ts = sampleStart;
-        const res = landmarker.detectForVideo(analysisCanvas, ts);
-        const facePresent = res.faceLandmarks.length > 0;
+        let res: any;
+        try {
+          res = landmarker.detectForVideo(analysisCanvas as any, ts);
+          attempts = 0; // reset on success
+        } catch (e) {
+          attempts++;
+          console.error(`detectForVideo threw (attempt ${attempts}):`, e);
+          if (attempts >= maxAttemptsBeforeFailFast) {
+            timedOut = true;
+            break;
+          }
+          await sleep(100);
+          continue;
+        }
+        const facePresent = res?.faceLandmarks?.length > 0;
         hasFace.push(facePresent);
 
         if (facePresent) {
@@ -302,9 +316,6 @@ export async function captureLiveSequence(
 
       const elapsed = performance.now() - startTime;
       if (elapsed >= durationMs) break;
-      // Adaptive sleep: keep ~intervalMs between sample STARTS even when a slow
-      // device takes longer to run the model, so a 2.2s window still yields enough
-      // frames on old hardware.
       const nextAt = sampleStart + intervalMs;
       const sleepMs = Math.max(16, nextAt - performance.now());
       if (sleepMs > 0) {
