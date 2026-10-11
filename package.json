@@ -43,6 +43,7 @@
     "@worldcoin/idkit-core": "^4.4.0",
     "@worldcoin/minikit-js": "^2.0.3",
     "@x402/evm": "^2.25.0",
+    "bs58": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
