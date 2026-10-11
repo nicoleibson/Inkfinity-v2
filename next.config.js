@@ -31,6 +31,32 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.appspot.com https://*.googleusercontent.com https://api.worldcoin.org https://api.world.org https://*.vercel.app https://cloudflare-eth.com https://polygon-rpc.com https://rpc-amoy.polygon.technology https://worldchain-mainnet.g.alchemy.com https://worldchain-sepolia.g.alchemy.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' https://auth.walletconnect.com https://verify.walletconnect.com https://*.walletconnect.com; object-src 'none'; base-uri 'self';"
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin'
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(self), microphone=(self), geolocation=(), interest-cohort=()'
+          }
+        ]
+      }
+    ];
+  },
+
   images: {
     remotePatterns: [
       {
