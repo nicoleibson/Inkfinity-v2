@@ -171,9 +171,11 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
           console.warn("Liveness model unavailable, skipping liveness check.");
         }
 
+        console.log("Building frames from liveness:", liveness);
         const primaryFrame = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 0 ? liveness.frames[0] : frame.dataUri;
         const frame2 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
         const frame3 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
+        console.log("Frames prepared, calling API...");
 
         // The server re-runs the comparison against the registered scan stored in the
         // database and is the only party that decides whether to grant the session.
