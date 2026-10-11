@@ -140,10 +140,13 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         let liveness: "unavailable" | Awaited<ReturnType<typeof captureLiveSequence>> = "unavailable";
         try {
           console.log("Starting liveness check...");
+          let timeoutId: NodeJS.Timeout | null = null;
           liveness = await Promise.race([
-            captureLiveSequence(video, canvas),
+            captureLiveSequence(video, canvas).finally(() => {
+              if (timeoutId) clearTimeout(timeoutId);
+            }),
             new Promise<"unavailable">((resolve) => {
-              setTimeout(() => {
+              timeoutId = setTimeout(() => {
                 console.warn("Liveness check timed out after 8s, falling back to unavailable");
                 resolve("unavailable");
               }, LIVENESS_SAFETY_TIMEOUT_MS);
