@@ -1,62 +1,16 @@
 // src/context/wallet-provider.tsx
 "use client";
 
-import { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef, Component, Suspense } from "react";
-import dynamic from "next/dynamic";
+import { createContext, useState, useContext, ReactNode, useEffect, useCallback } from "react";
 import { BrowserProvider, Eip1193Provider } from "ethers";
 import { useToast } from "@/hooks/use-toast";
 import { auth, database } from "@/lib/firebase-config";
 import { ref, update, query, orderByChild, equalTo, get } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
 import { usePlatformSettings } from "@/hooks/usePlatformSettings";
-import { appkitEnabled } from "@/context/appkit";
 import { ensureMiniKitInstalled, getWorldAppProviderOrNull, isInWorldApp } from "@/lib/world-app";
-import type { AppKitBridgeState, AppKitBridgeActions } from "./appkit-bridge";
 
 // Resilient dynamic loader with retry to guard against transient network/chunk failures
-const loadAppKitBridge = async () => {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const m = await import("./appkit-bridge");
-      return m.AppKitBridge;
-    } catch (err) {
-      console.warn(`[WalletProvider] Attempt ${attempt + 1} to load AppKit bridge failed:`, err);
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    }
-  }
-  console.warn("[WalletProvider] AppKit chunk unavailable; continuing with standard injected wallet fallback.");
-  return () => null;
-};
-
-const AppKitBridge = dynamic(loadAppKitBridge, { ssr: false });
-
-class AppKitErrorBoundary extends Component<
-  { children: ReactNode; onError?: () => void },
-  { hasError: boolean }
-> {
-  constructor(props: { children: ReactNode; onError?: () => void }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    console.warn("[WalletProvider] AppKit caught in boundary, falling back safely:", error);
-    this.props.onError?.();
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return null;
-    }
-    return this.props.children;
-  }
-}
 
 interface IWalletContext {
   connectWallet: () => Promise<void>;
@@ -145,23 +99,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const { settings } = usePlatformSettings();
 
-  const [appkitState, setAppkitState] = useState<AppKitBridgeState>({
-    isConnected: false,
-    address: null,
-    walletProvider: null,
-    caipNetworkId: null,
-  });
-  const appkitConnectedRef = useRef(false);
-  const handleAppkitState = useCallback((state: AppKitBridgeState) => setAppkitState(state), []);
 
-  const appkitOpenRef = useRef<(() => void) | null>(null);
-  const appkitDisconnectRef = useRef<(() => Promise<void>) | null>(null);
-  const appkitSwitchNetworkRef = useRef<((name: string) => Promise<void>) | null>(null);
-  const handleAppkitActions = useCallback((actions: AppKitBridgeActions) => {
-    appkitOpenRef.current = actions.open;
-    appkitDisconnectRef.current = actions.disconnect;
-    appkitSwitchNetworkRef.current = actions.switchNetworkByName;
-  }, []);
 
   const disconnectWallet = useCallback(async () => {
     const currentUser = auth.currentUser;
@@ -172,9 +110,6 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
     setWalletAddress(null);
     setProvider(null);
-    if (appkitEnabled) {
-        appkitDisconnectRef.current?.();
-    }
     console.log("Wallet disconnected.");
   }, [toast]);
 
@@ -222,13 +157,6 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       connectWallet,
       disconnectWallet
     }}>
-      {mounted && appkitEnabled && !isInWorldApp() && (
-        <Suspense fallback={null}>
-          <AppKitErrorBoundary onError={() => { appkitOpenRef.current = null; }}>
-            <AppKitBridge onState={handleAppkitState} onActions={handleAppkitActions} />
-          </AppKitErrorBoundary>
-        </Suspense>
-      )}
       {children}
     </WalletContext.Provider>
   );
