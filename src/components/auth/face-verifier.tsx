@@ -139,16 +139,17 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         const LIVENESS_SAFETY_TIMEOUT_MS = 8000;
         let liveness: "unavailable" | Awaited<ReturnType<typeof captureLiveSequence>> = "unavailable";
         try {
+          console.log("Starting liveness check...");
           liveness = await Promise.race([
             captureLiveSequence(video, canvas),
             new Promise<"unavailable">((resolve) => {
-              const t = setTimeout(() => {
+              setTimeout(() => {
                 console.warn("Liveness check timed out after 8s, falling back to unavailable");
                 resolve("unavailable");
               }, LIVENESS_SAFETY_TIMEOUT_MS);
-              // ensure timeout is cleaned up in race? not strictly necessary
             }),
           ]);
+          console.log("Liveness check completed:", liveness);
         } catch (e) {
           console.error("Liveness check threw error:", e);
           liveness = "unavailable";
