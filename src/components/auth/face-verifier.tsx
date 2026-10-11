@@ -196,7 +196,7 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
           error?: string;
           isMatch?: boolean;
         };
-        console.log("Face verification API response:", { status: grantResponse.status, ok: grantResponse.ok, grant });
+        console.log("Face verification API response:", { status: grantResponse.status, ok: grantResponse.ok, grant: JSON.stringify(grant) });
 
         const confidence = grant.confidence ?? 0;
         const confidencePercent = Math.round(confidence * 100);
