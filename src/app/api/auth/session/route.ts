@@ -4,6 +4,10 @@ import { signFaceRequirement } from '@/lib/crypto/hmac';
 import { hasActiveMembership } from '@/lib/utils/membership';
 
 export const runtime = 'nodejs';
+// Firebase Admin cold start + Google Auth/RTDB round-trips can exceed Vercel's
+// default 10s function limit, which surfaced as a 504 Gateway Timeout. Give the
+// route headroom so it is never killed mid-session-creation.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {

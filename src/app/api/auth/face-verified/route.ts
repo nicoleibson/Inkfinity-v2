@@ -5,6 +5,9 @@ import { hasActiveMembership } from '@/lib/utils/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// The Genkit/Gemini comparison + Firebase Admin round-trips routinely exceed
+// Vercel's default 10s function limit, which can surface as a 504.
+export const maxDuration = 60;
 
 // FIX 4: Subido de 0.8 → 0.92. Un 2FA biométrico no puede aceptar
 // similitudes del 80%; se requiere alta certeza.

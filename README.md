@@ -21,11 +21,11 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Role-Based User System:** Distinct roles for Clients, Tattoo Artists, Studios, and Supply Stores, each with a tailored user experience.
 *   **AI-Powered Onboarding & Content Creation:** New users get AI-generated bios, and artists receive AI assistance for artwork titles, descriptions, and tags.
 *   **Advanced Artwork & Digital Asset Management:** Artists can upload their portfolios and list existing NFTs for sale.
-*   **Web3 Integration:** Secure, peer-to-peer transactions for artwork sales, memberships and booking deposits in **WLD on WorldChain** (native **Worldcoin MiniKit** + **SIWE** inside the World App, and **Reown AppKit**/WalletConnect on the regular web, with fallback to injected extensions). The network is configurable and also supports WorldChain Sepolia, Polygon and Amoy.
+*   **Web3 Integration:** Secure, peer-to-peer transactions for artwork sales, memberships and booking deposits in **WLD on WorldChain** using **native Worldcoin MiniKit + SIWE inside the World App** (ERC-4337 userOperations). WalletConnect/Reown and injected-extension flows were **removed**; the only supported payment path is the World App MiniApp. The network is configurable and also supports WorldChain Sepolia, Polygon and Amoy.
 *   **Booking & Scheduling System:** Clients can book appointments with artists, who can manage their requests and availability settings through a dedicated dashboard.
 *   **Admin-to-User Chat:** Real-time messaging restricted to communication between administrators and users for platform support. Users contact each other via their social media links (WhatsApp, Instagram, Telegram) displayed on their profiles.
 *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings (including the active blockchain network), and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
-*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. Optional **facial scan 2FA** uses a multi-layer chain: client-side face detection (MediaPipe), liveness detection (blink + head motion), deterministic face embeddings (face-api), a 3-frame AI comparison with confidence scoring (Genkit/Gemini), escalating rate limiting, and an email-link fallback.
+*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. Optional **facial scan 2FA** uses a multi-layer chain: client-side face detection (MediaPipe), liveness detection (blink + head motion), a 3-frame AI comparison with confidence scoring (Genkit/Gemini, acceptance ≥ 0.92), **server-side** escalating rate limiting, an HMAC-signed httpOnly grant re-verified on the server, and an email-link fallback. See [`docs/FACIAL_VERIFICATION.md`](docs/FACIAL_VERIFICATION.md).
 
 ## Tech Stack
 
@@ -34,19 +34,20 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Hosting:** [Vercel](https://vercel.com) — canonical domain `https://inkfinity-ten.vercel.app`
 *   **Backend & Database:** [Firebase](https://firebase.google.com/) (Authentication, Realtime Database). *Firebase Storage was fully removed as image store; images live in each user's Google Drive account (via OAuth, module `src/lib/google-drive.ts`) and NFT artworks on IPFS (`src/lib/ipfs.ts`). Firebase is **not** the web host.*
 *   **Generative AI:** [Google AI & Genkit](https://firebase.google.com/docs/genkit)
-*   **Client-side ML:** [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision) (face detection + face landmarker) and [face-api.js](https://vladmandic.github.io/face-api/face-api.js/) (face embeddings), served from `public/models/`.
-*   **Web3:** [Ethers.js](https://ethers.io/) for wallet interactions, [Worldcoin MiniKit](https://docs.world.org/minikit) (native SIWE + ERC-4337 userOperations inside the World App) and [Reown AppKit](https://docs.reown.com/appkit) (WalletConnect) for external wallets, with fallback to injected extensions (`window.ethereum`).
+*   **Client-side ML:** [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision) (face detection + face landmarker for liveness), served from `public/models/`. (The former face-api.js embedding layer was removed.)
+*   **Web3:** [Ethers.js](https://ethers.io/) for wallet interactions and [Worldcoin MiniKit](https://docs.world.org/minikit) (native SIWE + ERC-4337 userOperations inside the World App). WalletConnect/Reown and injected-extension wallets were **removed**.
 *   **Blockchain:** [WorldChain](https://world.org) mainnet (chain ID 480, native token **WLD**).
 
 ## Getting Started
 
 To get the project up and running locally, please refer to the detailed instructions in the `docs/` directory:
 
-1.  **`docs/SETUP.md`**: Firebase CLI link, the full `.env.local` reference (Firebase, WorldChain RPCs, World App IDs, Reown), and Git setup.
-2.  **`docs/DEPLOYMENT.md`**: Deploying to **Vercel** (environment variables, authorized domains, Reown allowlist, World App domain allowlist, WorldChain settings) so camera + facial 2FA + email link and payments work on real devices.
-3.  **`docs/ADVANCED_INTEGRATIONS.md`**: Server-side logic and AI flows, plus the **WorldChain + MiniKit** architecture and the current limitations of the userOp payment verification.
-4.  **`docs/SECURITY.md`**: An in-depth overview of the platform's security architecture.
-5.  **`docs/TROUBLESHOOTING.md`**: Common issues — camera/HTTPS, WalletConnect, World App SIWE, `no such account`, and userOperation verification.
+1.  **`docs/SETUP.md`**: Firebase CLI link, the full `.env.local` reference (Firebase, WorldChain RPCs, World App IDs), and Git setup.
+2.  **`docs/DEPLOYMENT.md`**: Deploying to **Vercel** (environment variables, authorized domains, World App domain allowlist, WorldChain settings, CSP) so camera + facial 2FA + email link and payments work on real devices.
+3.  **`docs/FACIAL_VERIFICATION.md`**: Standalone, reproducible reference for the **facial 2FA system** (layered pipeline, API contract, thresholds, data model, env vars, CSP).
+4.  **`docs/ADVANCED_INTEGRATIONS.md`**: Server-side logic and AI flows, plus the **WorldChain + MiniKit** architecture and the current limitations of the userOp payment verification.
+5.  **`docs/SECURITY.md`**: An in-depth overview of the platform's security architecture.
+6.  **`docs/TROUBLESHOOTING.md`**: Common issues — camera/HTTPS, Firebase JSONP CSP, geolocation, World App SIWE, `no such account`, and userOperation verification.
 
 ---
 

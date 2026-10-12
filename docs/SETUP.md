@@ -91,13 +91,11 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 NEXT_PUBLIC_GEMINI_API_KEY=
 # Canonical site URL (production: https://inkfinity-ten.vercel.app).
-# Used by AppKit metadata.url, NFT metadata external_url and OpenGraph canonicals.
+# Used by NFT metadata external_url and OpenGraph canonicals.
 NEXT_PUBLIC_SITE_URL=https://inkfinity-ten.vercel.app
 # Platform treasury address — MUST be a World Chain (chainId 480) address when
 # the network is set to WorldChain Mainnet, otherwise payments revert.
 NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS=
-# Reown AppKit (WalletConnect) - optional, enables mobile wallet connect (see docs/DEPLOYMENT.md §1.5)
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 
 # --- World App / Worldcoin MiniKit (docs/ADVANCED_INTEGRATIONS.md) ---
 # App ID from https://developer.world.org. Required for MiniKit.install().
@@ -132,21 +130,22 @@ FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 # Genkit AI (server-side):
 GEMINI_API_KEY=
+# HMAC key for facial-verification 2FA grants (face_req_signed / face_verified_signed).
+# REQUIRED in production — the server throws if missing. Generate with: openssl rand -base64 48
+FACE_VERIFICATION_SECRET=
 ```
 
 > **Important for deployment:** Vercel does **not** read `.env.local`. The `NEXT_PUBLIC_*` variables must be set in **Vercel → Project → Settings → Environment Variables** (they are inlined at build time). See `docs/DEPLOYMENT.md`.
 
-> **Build memory:** the production bundle is heavy (AppKit/WalletConnect + MiniKit). If `npm run build` fails with a worker crash or OOM, it's low memory — the `build` script already sets `NODE_OPTIONS='--max-old-space-size=1536'`.
+> **Build memory:** the production bundle is heavy (MiniKit + viem/ox). If `npm run build` fails with a worker crash or OOM, it's low memory — the `build` script already sets `NODE_OPTIONS='--max-old-space-size=1536'`.
 
-## Mobile wallet connect (WalletConnect / Reown AppKit)
+## Payments: World App only
 
-Optional. When `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is set, "Connect Wallet" opens the Reown AppKit modal: mobile users get a QR code or a deep link to their wallet app (Android/iOS); desktop still supports injected extensions (e.g. MetaMask) through the modal. Without the Project ID the app keeps the legacy `window.ethereum` extension-only flow.
-
-To get a Project ID and configure allowed domains, see `docs/DEPLOYMENT.md` §1.5.
+WalletConnect/Reown (AppKit) and injected-extension wallets were **removed**. The only supported payment path is **Worldcoin MiniKit inside the World App** (see the next section). Do not set `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`.
 
 ## World App (Worldcoin MiniKit)
 
-When the app runs inside the World App, `src/lib/world-app.ts` detects it (`MiniKit.isInWorldApp()`) and the wallet layer switches to **MiniKit + SIWE** instead of AppKit. There is no QR code and no injected provider: the World App supplies the EIP-1193 provider itself.
+When the app runs inside the World App, `src/lib/world-app.ts` detects it (`MiniKit.isInWorldApp()`) and the wallet layer uses **MiniKit + SIWE**. There is no QR code and no injected provider: the World App supplies the EIP-1193 provider itself.
 
 Requirements:
 
@@ -166,6 +165,8 @@ The facial 2FA feature requires a **camera** and therefore a **secure context**:
 
 - **Local development:** run on `localhost` (secure-context exemption): `npm run dev` → http://localhost:3000
 - **Real devices (phone):** the app must be served over **HTTPS**. Testing over `http://<your-ip>:3000` will fail with "Camera Not Supported Here". Use the deployed Vercel URL or a tunnel (`cloudflared`, `ngrok`); see `docs/DEPLOYMENT.md`.
+
+Full reproducible reference for the facial 2FA pipeline (dependencies, model assets, API contract, thresholds, CSP) is in `docs/FACIAL_VERIFICATION.md`.
 
 ## GitHub Configuration
 

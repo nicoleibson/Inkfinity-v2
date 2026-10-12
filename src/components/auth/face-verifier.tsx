@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
 import { auth, database } from '@/lib/firebase-config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
+import { captureFaceFrame, captureLiveSequence, preloadFaceLandmarker } from '@/lib/client/face-capture';
 import { requestCamera, cameraErrorTitle, cameraErrorDescription } from '@/lib/client/camera';
 import type { CameraDiagnostics } from '@/lib/client/camera';
 import { getVerificationLock, registerVerificationFailure, resetVerificationFailures, formatRetryTime } from '@/lib/face-lock';
@@ -80,6 +80,9 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
   }, [stopCamera, startCamera]);
 
   useEffect(() => {
+    // Warm the liveness model while the user positions their face so the
+    // one-time WASM/model download does not trigger the liveness timeout.
+    preloadFaceLandmarker();
     startCamera();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -136,7 +139,9 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         }
 
         // Liveness gate: verify a live person (blink or head motion) over ~2s.
-        const LIVENESS_SAFETY_TIMEOUT_MS = 8000;
+        // Generous safety net: on a cold load the landmarker WASM/model init can
+        // take a while, and aborting early degrades liveness to "unavailable".
+        const LIVENESS_SAFETY_TIMEOUT_MS = 15000;
         let liveness: "unavailable" | Awaited<ReturnType<typeof captureLiveSequence>> = "unavailable";
         try {
           console.log("Starting liveness check...");
@@ -147,7 +152,7 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
             }),
             new Promise<"unavailable">((resolve) => {
               timeoutId = setTimeout(() => {
-                console.warn("Liveness check timed out after 8s, falling back to unavailable");
+                console.warn(`Liveness check timed out after ${LIVENESS_SAFETY_TIMEOUT_MS}ms, falling back to unavailable`);
                 resolve("unavailable");
               }, LIVENESS_SAFETY_TIMEOUT_MS);
             }),

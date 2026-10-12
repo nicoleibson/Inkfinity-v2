@@ -12,7 +12,7 @@ All server-side AI logic is implemented with [Genkit](https://firebase.google.co
 
 | Flow | Agent | Purpose |
 | --- | --- | --- |
-| `verifyFace` | `verify-face-agent.ts` | Compares the registered facial scan + 3 chronological live captures (sent as data URIs), returns `isMatch` + `confidence` (0-1). Rejection needs `confidence ≥ 0.8`. |
+| `verifyFace` | `verify-face-agent.ts` | Compares the registered facial scan + 3 chronological live captures (sent as data URIs), returns `isMatch` + `confidence` (0-1). Rejection needs `confidence ≥ 0.92` (enforced server-side in `api/auth/face-verified`). See `docs/FACIAL_VERIFICATION.md`. |
 | `generateArtworkDetails` | `artwork-details-generation-agent.ts` | Generates title, description, and tags for uploaded artwork. |
 | `moderateImage` | `image-moderation-agent.ts` | Scans images for inappropriate content and blocks flagged uploads. |
 | `generateOnboardingContent` | `onboarding-assistant-agent.ts` | Creates a professional bio and avatar for new users. |
@@ -32,9 +32,10 @@ A separate Node.js directory (`inkfinity-ml/`) hosts Firebase Functions (v2) usi
 
 Heavy vision models run in the browser (not on the server) so the AI layer only consumes small JPEG data URIs:
 
-- **`face-capture.ts`** — MediaPipe FaceDetector + FaceLandmarker (local WASM + `.tflite`/`.task` in `public/models/`), frame compression, and the liveness sequence.
-- **`face-recognition.ts`** — face-api.js embeddings (lazy-loaded via dynamic import to avoid SSR issues with tensorflow.js).
+- **`face-capture.ts`** — MediaPipe FaceDetector + FaceLandmarker (local WASM + `.tflite`/`.task` in `public/models/`), frame compression, and the liveness sequence (blink + head motion).
 - **`camera.ts`** — camera access with actionable diagnostics (HTTPS check, permissions, device-in-use).
+
+> The former `face-recognition.ts` (face-api.js embeddings) was removed; identity is decided server-side by the Gemini comparison. See `docs/FACIAL_VERIFICATION.md`.
 
 ### WorldChain + Worldcoin MiniKit (`src/lib/world-app.ts`)
 
@@ -48,10 +49,11 @@ Inkfinity settles payments on **WorldChain** using the **native token WLD** (cha
 | Config source | `platform_settings.network` in Realtime Database (overrides the code default) |
 | Single source of truth | `NETWORK_NAMES` / `DEFAULT_NETWORK` in `src/lib/blockchain.ts` |
 
-Two wallet paths coexist behind a single UI:
+A single wallet path is supported:
 
-1. **Inside the World App (native).** `isInWorldApp()` (`MiniKit.isInWorldApp()`) switches the wallet layer to MiniKit + **SIWE**. There is no QR and no injected provider — the World App provides an EIP-1193 provider whose `eth_requestAccounts` and `eth_chainId` (480) are routed through MiniKit. AppKit is not mounted in this mode. Global typing lives in `global.d.ts`.
-2. **Regular web (external).** [Reown AppKit](https://docs.reown.com/appkit) with WalletConnect QR / deep links, falling back to injected extensions (`window.ethereum`) when no Project ID is set.
+1. **Inside the World App (native).** `isInWorldApp()` (`MiniKit.isInWorldApp()`) switches the wallet layer to MiniKit + **SIWE**. There is no QR and no injected provider — the World App provides an EIP-1193 provider whose `eth_requestAccounts` and `eth_chainId` (480) are routed through MiniKit. Global typing lives in `global.d.ts`.
+
+> **WalletConnect / Reown (AppKit) was removed.** There is no external/QR wallet flow on the regular web; payments happen only inside the World App. See `src/context/wallet-provider.tsx` and `src/lib/world-app.ts`.
 
 **UserOperations (ERC-4337).** `MiniKit.sendTransaction` returns a **userOpHash**, not a conventional `txHash`, so the usual `tx.wait()` pattern does not apply. The server resolves the userOp through the World Developer Portal:
 

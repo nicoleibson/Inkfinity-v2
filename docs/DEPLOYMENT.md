@@ -43,7 +43,6 @@ Configúralas en **Vercel → Project → Settings → Environment Variables**, 
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | public | (del proyecto) |
 | `NEXT_PUBLIC_GEMINI_API_KEY` | public | (del proyecto) |
 | `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | public | wallet de tesorería **en WorldChain** |
-| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | public | 16-hex-chars del dashboard de Reown (§1.5) |
 | `PLATFORM_WALLET_ADDRESS` | server | misma wallet; fallback del público |
 | `RPC_WORLDCHAIN_URL` | server | RPC de WorldChain mainnet (ver `route.ts` para fallbacks) |
 | `RPC_WORLDCHAIN_SEPOLIA_URL` | server | RPC de WorldChain Sepolia (opcional) |
@@ -53,24 +52,15 @@ Configúralas en **Vercel → Project → Settings → Environment Variables**, 
 | `FIREBASE_CLIENT_EMAIL` | server | service account para escrituras admin en RTDB |
 | `FIREBASE_PRIVATE_KEY` | server | clave privada del service account (con `\n` literales) |
 | `GEMINI_API_KEY` | server | Genkit AI |
+| `FACE_VERIFICATION_SECRET` | server | **clave HMAC** de la verificación facial 2FA (obligatoria; `openssl rand -base64 48`). Sin ella el servidor lanza error en producción |
 
 > **Importante:** añadir una variable nueva a un proyecto ya desplegado **no** la hace disponible en el bundle sin un **rebuild**. Tras cambiar cualquier `NEXT_PUBLIC_*`, redeploy (rebuild), no basta con un restart.
 
 > **Las URLs de Firebase no son de hosting.** `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` y `..._DATABASE_URL` apuntan a `firebaseapp.com` / `firebaseio.com` a propósito; no se cambian al migrar a Vercel.
 
-### 1.5 Reown AppKit / WalletConnect (billeteras móviles)
+### 1.5 WalletConnect / Reown — eliminado
 
-Se usa **Reown AppKit** (WalletConnect) para conectar billeteras desde Android/iOS (deep link o QR). El Project ID es público por diseño (va embebido en el bundle).
-
-1. Crear el proyecto en <https://dashboard.reown.com> (nombre y URL; para cloud déjalo vacío) y copiar su Project ID.
-2. Añadir `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` en Vercel (ver §1) y **rebuild**.
-3. **Dominios permitidos en Reown** (Reown Dashboard → proyecto → *App Configuration / Domains*):
-   - `inkfinity-ten.vercel.app`
-   - `localhost` (desarrollo)
-   - Cualquier dominio personalizado adicional.
-4. El `metadata.url` de AppKit (`src/context/appkit-bridge.tsx`) usa `NEXT_PUBLIC_SITE_URL`; debe coincidir con el dominio desplegado porque la Verify API de Reown lo compara.
-
-> Sin Project ID la app **no rompe**: "Connect Wallet" cae al flujo por extensiones (`window.ethereum`).
+**Ya no se usa Reown AppKit ni WalletConnect.** El único flujo de pago soportado es **Worldcoin MiniKit dentro de la World App** (ver §1.6). No configures `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` ni allowlists en el dashboard de Reown: no existe esa dependencia.
 
 ### 1.6 Worldcoin Developer Portal (World App / MiniKit)
 
@@ -99,7 +89,7 @@ Requisito de `sendSignInLinkToEmail` (fallback por email link).
 
 ## 3. Desplegar (obtener HTTPS)
 
-El deploy web es **Vercel**, no Firebase. Next.js se auto-detecta; el script `build` del repo ya sube la memoria (`NODE_OPTIONS='--max-old-space-size=1536'`) porque el bundle (AppKit + MiniKit) es pesado.
+El deploy web es **Vercel**, no Firebase. Next.js se auto-detecta; el script `build` del repo ya sube la memoria (`NODE_OPTIONS='--max-old-space-size=1536'`) porque el bundle (MiniKit + viem/ox) es pesado.
 
 **Opción A — Git (recomendada):** conectar el repo en Vercel con el branch `main`. Cada push dispara build y deploy; los domains se asignan en *Project → Settings → Domains*.
 
@@ -131,8 +121,10 @@ firebase deploy --only storage  --project inkfinity-2d470
 - [ ] "Email me a secure link" envía correo y el link completa la verificación **desde otro dispositivo**.
 - [ ] 3 intentos fallidos activan el bloqueo (`facialAttempts` en RTDB).
 - [ ] **Server Actions funcionan** desde el dominio desplegado. Si aparece `Invalid Server Actions request`, falta el dominio en `experimental.serverActions.allowedOrigins` de `next.config.js` (ahí debe estar `inkfinity-ten.vercel.app`).
-- [ ] "Connect Wallet" en móvil abre el modal de AppKit con deep link o QR (si `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` está definido).
+- [ ] El pago solo funciona dentro de la **World App** (no hay conexión de wallet externa).
 - [ ] La red efectiva es **WorldChain Mainnet** (símbolo WLD) en `/admin` y en el badge del navbar.
+- [ ] La consola no muestra errores de CSP: Firebase **Realtime Database** (JSONP a `*.firebaseio.com`) y Auth cargan sin bloqueos. Si aparece `... violates ... script-src`, falta `https://*.firebaseio.com` en `script-src` (ver `docs/FACIAL_VERIFICATION.md` §9).
+- [ ] La geolocalización funciona en `/`, `/settings` y `/search` (`Permissions-Policy: geolocation=(self)`).
 - [ ] `/api/ipfs` genera metadatos con `external_url` = `https://inkfinity-ten.vercel.app`.
 - [ ] Dentro de la World App: la conexión pide firma SIWE y el pago devuelve `userOpHash`.
 

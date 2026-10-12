@@ -72,6 +72,12 @@ export function downscaleCanvas(
   maxDim: number = MAX_CAPTURE_DIM,
   quality: number = JPEG_QUALITY
 ): string {
+  // A canvas whose stream was stopped (e.g. camera released mid-sequence) has
+  // zero dimensions; drawing it throws InvalidStateError. Fail with a clear
+  // error instead so callers can degrade gracefully.
+  if (!source.width || !source.height) {
+    throw new Error("Cannot downscale a source with zero width/height.");
+  }
   const scale = Math.min(1, maxDim / Math.max(source.width, source.height));
   const width = Math.max(1, Math.round(source.width * scale));
   const height = Math.max(1, Math.round(source.height * scale));
@@ -161,6 +167,15 @@ async function getFaceLandmarker(): Promise<FaceLandmarker | null> {
     })();
   }
   return landmarkerPromise;
+}
+
+/**
+ * Kicks off landmark-model loading ahead of the first liveness check so the
+ * one-time WASM/model download does not eat into the liveness safety timeout.
+ * Safe to call repeatedly (the promise is cached).
+ */
+export function preloadFaceLandmarker(): void {
+  void getFaceLandmarker();
 }
 
 const RAD_TO_DEG = 180 / Math.PI;
@@ -280,6 +295,10 @@ export async function captureLiveSequence(
     const maxAttemptsBeforeFailFast = 2;
     while (true) {
       if (timedOut) break;
+      // The camera may have been released (component unmounted / stopCamera),
+      // which zeroes the video dimensions. Stop instead of drawing a 0-sized
+      // frame, which would throw InvalidStateError and leave the loop running.
+      if (!video.videoWidth || !video.videoHeight) break;
       const sampleStart = performance.now();
       try {
         analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
@@ -308,7 +327,7 @@ export async function captureLiveSequence(
           poses.push(headPoseFromTransform(res.facialTransformationMatrixes?.[0]) ?? { pitchDeg: 0, yawDeg: 0, rollDeg: 0 });
 
           const progress = (sampleStart - startTime) / durationMs;
-          if (keepNext < keepRatios.length && progress >= keepRatios[keepNext]) {
+          if (keepNext < keepRatios.length && progress >= keepRatios[keepNext] && video.videoWidth && video.videoHeight) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);

@@ -58,35 +58,65 @@ Then rebuild and redeploy — changing `next.config.js` always requires a **rebu
 
 ---
 
-## WalletConnect "Origin Not Allowed" Error
+## WalletConnect / Reown "Origin Not Allowed" Error (obsoleto)
 
 ### Problem
-When you try to connect your wallet, the connection fails, and you see an error in the browser's console that looks like this:
+Al conectar una wallet externa aparecía `WebSocket connection closed abnormally with code: 3000 (Unauthorized: origin not allowed)`.
 
-`Error: WebSocket connection closed abnormally with code: 3000 (Unauthorized: origin not allowed)`
+### Cause / Solution
+**Esta sección ya no aplica: WalletConnect/Reown (AppKit) fue eliminado por completo** para dejar **únicamente el pago nativo con Worldcoin (WLD) vía MiniKit dentro de la World App** (ver `src/context/wallet-provider.tsx` y `src/lib/world-app.ts`). Ya no hay proyecto de Reown, ni `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, ni allowlist de dominios de Reown.
+
+Si vuelve a aparecer un error de conexión de wallet, revisa en su lugar:
+- Que la app se abra **dentro de la World App** para el flujo MiniKit (el `domain`/`uri` del SIWE derivan de `window.location`).
+- Que el dominio esté registrado en el **World Developer Portal** (ver `docs/DEPLOYMENT.md` §1.6).
+
+---
+
+## Firebase no conecta en producción: CSP bloquea `*.firebaseio.com`
+
+### Problem
+En producción (Vercel) el usuario inicia sesión pero **los datos no cargan** y en la consola aparece un error tipo:
+
+```
+Loading the script 'https://inkfinity-2d470-default-rtdb.firebaseio.com/.lp?start=t&ser=...&cb=...&v=5' violates the following Content Security Policy directive: "script-src ..."
+```
 
 ### Cause
-This is a security feature from the WalletConnect cloud service, not a bug in the application code. Your project on their platform will only accept connection requests from domains (also called "origins") that you have explicitly approved. Because your development environment runs on a dynamic URL, you must add it to the allowlist.
+Firebase **Realtime Database** usa *JSONP long-polling*: inyecta `<script src="https://<proj>-default-rtdb.firebaseio.com/.lp?...">`. Si `script-src` en la CSP **no** incluye `https://*.firebaseio.com`, todos los `<script>` de RTDB se bloquean y la conexión a la base de datos falla (no hay datos de usuario, se cierra la sesión aparentemente).
 
 ### Solution
-Follow these steps to add the current URL to your Reown project's allowlist:
+En `next.config.js` → `headers()` → `Content-Security-Policy`, añade en `script-src`:
 
-1.  **Go to the Reown Dashboard:** Open a new browser tab and navigate to [https://dashboard.reown.com/](https://dashboard.reown.com/).
+```
+https://*.firebaseio.com
+```
 
-2.  **Select Your Project:** Log in and select the project for this application (project ID `fedf6cd812a74a885931241545a8120d`).
+Y en `connect-src` (además del long-polling):
 
-3.  **Go to App Configuration:** Open **App Configuration → Domains** (este es el allowlist de Reown).
+```
+https://*.firebaseio.com wss://*.firebaseio.com
+```
 
-4.  **Add the Origin URL:**
-    *   For local development: add `http://localhost:3000` (or whatever port you use).
-    *   For production: add `https://inkfinity-ten.vercel.app`.
-    *   If you use preview deployments (Vercel preview URLs), add the pattern `*.vercel.app` to cover all preview deployments automatically.
+En `frame-src` añade también `https://*.firebaseio.com`. Cambiar `next.config.js` **requiere rebuild** (no basta con redeploy). Ver `docs/FACIAL_VERIFICATION.md` §9 para la CSP completa que necesita Auth + RTDB.
 
-5.  **Save Changes:** Click **Save** or **Apply**.
+---
 
-6.  **Test:** Reload your application and try connecting your wallet again. The error should be gone.
+## La ubicación del usuario no funciona (`Location not allowed`)
 
-> **Note:** If you are using a preview deployment (e.g., `inkfinity-git-feature-xyz.vercel.app`), the `*.vercel.app` wildcard in step 4 will cover it. You only need to add specific URLs for custom domains.
+### Problem
+El ordenado de obras por cercanía en `/`, y el uso de geolocalización en `/settings` y `/search`, no obtienen la posición.
+
+### Cause
+`Permissions-Policy` enviaba `geolocation=()`, lo que **deshabilita** la Geolocation API para el propio origen.
+
+### Solution
+En `next.config.js`, el header `Permissions-Policy` debe usar `geolocation=(self)` (no `geolocation=()`):
+
+```
+camera=(self), microphone=(self), geolocation=(self), interest-cohort=()
+```
+
+Cambiar `next.config.js` requiere **rebuild**.
 
 ---
 
@@ -147,41 +177,31 @@ Los campos inicializadores que el cliente sí puede escribir en el alta están p
 
 ---
 
-## Verificación Facial: Bypass tras verificación exitosa (solucionado)
+## Verificación Facial: bucle de redirección a `/verify-face` tras verificar
 
 ### Problema
-Tras completar la verificación facial en `/verify-face`, el usuario es redirigido a la página objetivo (ej. `/`) pero es inmediatamente redirigido de vuelta a `/verify-face` en bucle. La verificación facial pareció exitosa, pero el middleware seguía bloqueando el acceso.
+Tras completar la verificación facial, el usuario es redirigido a la página objetivo (ej. `/`) pero el middleware lo devuelve inmediatamente a `/verify-face`, en bucle.
 
 ### Causa
-La verificación facial actualiza correctamente el custom claim `faceVerified` en Firebase Auth, y el cliente llama a `getIdToken(true)` para refrescar el ID token. Sin embargo, la cookie de sesión (`__session`) que usa el middleware **no se actualiza automáticamente** cuando cambian los custom claims. La cookie solo se refresca en el próximo login o cuando se refresca explícitamente vía `/api/auth/session`. Esto crea una ventana donde el usuario tiene los custom claims actualizados en su ID token (en memoria), pero el middleware sigue viendo la cookie de sesión antigua sin el claim `faceVerified`, por lo que redirige de vuelta a `/verify-face`.
+Los custom claims (`faceVerified`, `faceVerifiedAt`) se actualizan en Firebase Auth, pero la cookie `__session` que consume la verificación de sesión no incorpora el claim automáticamente. Sin embargo, el middleware **no depende solo del claim**: aplica el requisito firmado (`face_req_signed`) y el grant firmado (`face_verified_signed`).
 
-### Solución
-Se implementó una **cookie dedicada `face_verified`** que se setea inmediatamente en el cliente tras la verificación exitosa:
+### Solución (implementación actual)
+El grant se transporta en una **cookie httpOnly firmada con HMAC** (`face_verified_signed`), emitida por el servidor en `POST /api/auth/face-verified` **solo tras reverificar el rostro** contra el scan de la base de datos, y atada al `uid`:
 
-1. **Cliente setea cookie inmediatamente** (`src/components/auth/face-verifier.tsx`):
-   ```js
-   document.cookie = 'face_verified=true; path=/; max-age=3600; sameSite=lax';
-   ```
+1. **Servidor emite el grant** (`src/app/api/auth/face-verified/route.ts`): `setCustomUserClaims(uid, { faceVerified: true, faceVerifiedAt })` + cookie `face_verified_signed` (httpOnly, `secure` en prod, `sameSite=lax`, `path=/`, TTL 1 h).
+2. **El cliente refresca la sesión** (`src/app/verify-face/page.tsx`): tras el éxito, `auth.currentUser.getIdToken(true)` y luego `POST /api/auth/session` para volcar el claim en `__session`; después `router.push(redirect)`.
+3. **Middleware valida ambos** (`src/middleware.ts`):
+   - `face_req_signed` (¿este usuario requiere 2FA?) y `face_verified_signed` (¿grant válido y del mismo `uid`?).
+   - Además consulta `/api/auth/verify-session` (que ahora lee la sesión por el header `Authorization: Bearer`, no por query param) y comprueba `faceVerifiedAt` contra la ventana de 1 h.
+   - Un grant de **otro** `uid` **no** satisface el requisito.
+4. **Logout limpia el grant**: `POST /api/auth/logout` borra `__session` y las cookies firmadas `face_req_signed` / `face_verified_signed`.
 
-2. **Middleware verifica ambas fuentes** (`src/middleware.ts`):
-   - Verifica el custom claim `faceVerified` de la cookie de sesión (vía `/api/auth/verify-session`)
-   - **También** verifica la cookie dedicada `face_verified` directamente: `request.cookies.get('face_verified')?.value === 'true'`
-   - Cualquier fuente permite el acceso: `faceVerifiedFlag = faceVerified === true || faceVerifiedCookie`
-
-3. **Logout limpia la cookie** (`src/app/verify-face/page.tsx`):
-   ```js
-   document.cookie = 'face_verified=; path=/; max-age=0; sameSite=lax';
-   ```
-
-**Propiedades de la cookie:** `face_verified=true; path=/; max-age=3600; sameSite=lax` (TTL 1h, coincide con TTL del custom claim).
+> **Nota histórica:** versiones anteriores usaban una cookie `face_verified=true` **escrita por el cliente** (`document.cookie`). Ese diseño era **forjable** y fue reemplazado por el grant HMAC httpOnly descrito arriba. No reintroducir la cookie de cliente.
 
 ### Verificación
-Tras el fix, el flujo es:
-1. Usuario completa verificación facial en `/verify-face`
-2. Cliente setea cookie `face_verified=true` inmediatamente
-3. Cliente llama `/api/auth/face-verified` para setear custom claim (async)
-5. Cliente llama `/api/auth/session` para refrescar cookie de sesión (opcional, para propagar claim)
-6. Redirige a página objetivo
-6. Middleware ve cookie `face_verified` → **permite acceso inmediatamente**
+1. Verificación OK en `/verify-face` → el servidor responde `200 { success: true, confidence >= 0.92 }` y setea `face_verified_signed`.
+2. El cliente refresca `__session` con `getIdToken(true)`.
+3. `router.push(redirect)`; el middleware ve `face_verified_signed` válido + mismo `uid` → **permite el acceso**.
+4. Tras 1 h, el middleware redirige a `/verify-face?expired=true` para reverificar.
 
-Esto elimina la condición de carrera por completo, ya que la cookie se setea síncronamente en el navegador antes de la redirección.
+Detalle completo del contrato y de los umbrales en `docs/FACIAL_VERIFICATION.md`.

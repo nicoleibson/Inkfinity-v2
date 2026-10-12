@@ -11,7 +11,7 @@
 - Artwork Details Generation: AI tool suggests titles, descriptions, and tags for uploaded images.
 - Image Moderation: AI scans every uploaded image for inappropriate content.
 - Onboarding Assistant: AI suggests a professional bio and generates an avatar for new users.
-- Facial Scan Login (2FA): Optional AI-powered identity verification with client-side face detection (MediaPipe), liveness (blink + head motion), deterministic embeddings (face-api), a 3-frame AI comparison with confidence ≥ 0.8, escalating rate limiting, and an email-link fallback.
+- Facial Scan Login (2FA): Optional AI-powered identity verification with client-side face detection (MediaPipe), liveness (blink + head motion), a 3-frame AI comparison with confidence ≥ 0.92 decided on the server (HMAC-signed grant), escalating server-side rate limiting, and an email-link fallback. See `docs/FACIAL_VERIFICATION.md`.
 - Digital Asset Marketplace & Collection: Artists can list their artworks as "Digital Assets" for sale.
 - Digital Asset Marketplace & Collection: Users purchase assets using a points-based system.
 - Digital Asset Marketplace & Collection: Purchased assets appear in the user's personal "Collection".

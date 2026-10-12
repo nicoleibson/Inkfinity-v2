@@ -3,6 +3,8 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Avoid Vercel's 10s function-timeout 504 on Firebase Admin cold starts.
+export const maxDuration = 60;
 
 /**
  * A rejected token is the only thing that means "this session is invalid".
