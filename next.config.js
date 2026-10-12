@@ -7,6 +7,16 @@ const nextConfig = {
       config.devtool = false;
     }
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    // viem/ox (pulled in by @worldcoin/minikit-js) triggers a benign
+    // "Critical dependency: the request of a dependency is an expression"
+    // warning from an optional dynamic import. Silence only that warning.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      (warning) =>
+        typeof warning?.message === 'string' &&
+        warning.message.includes('Critical dependency: the request of a dependency is an expression') &&
+        (warning.module?.resource || '').includes('ox/_esm'),
+    ];
     // @coinbase/cdp-sdk and @base-org/account are transitively and optionally pulled
     // by @reown/appkit-adapter-ethers. They are unused by Inkfinity and pull in
     // massive Solana/CDP module trees that overwhelm dev memory.
@@ -50,7 +60,7 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(self), microphone=(self), geolocation=(), interest-cohort=()'
+            value: 'camera=(self), microphone=(self), geolocation=(self), interest-cohort=()'
           }
         ]
       }
