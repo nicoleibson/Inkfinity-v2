@@ -108,13 +108,22 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     uid = userRecord.uid;
 
-    // Generate username
+    // Generate username with collision retry loop
     const { add } = await import('date-fns');
-    const usernameBase = `${firstName.toLowerCase()}${lastName.toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+    const rawBase = `${firstName.toLowerCase()}${lastName.toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+    const usernameBase = rawBase || 'user';
     let username = usernameBase;
-    const usernameSnapshot = await db.ref(`usernames/${usernameBase}`).get();
-    if (usernameSnapshot.exists()) {
-      username = `${usernameBase}${Math.floor(Math.random() * 9000) + 1000}`;
+    let attempts = 0;
+    while (attempts < 10) {
+      const usernameSnapshot = await db.ref(`usernames/${username}`).get();
+      if (!usernameSnapshot.exists()) {
+        break;
+      }
+      attempts++;
+      username = `${usernameBase}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    if (attempts >= 10) {
+      username = `${usernameBase}${Date.now().toString().slice(-6)}`;
     }
 
     let status: 'pending_payment' | 'active' = 'active';

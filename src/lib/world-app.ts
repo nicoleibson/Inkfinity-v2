@@ -84,7 +84,10 @@ export async function resolveUserOp(userOpHash: string): Promise<{
   transaction_hash: string | null;
   sender: string | null;
 }> {
-  const res = await fetch(`${MINIKIT_USEROP_URL}${userOpHash}`);
+  const res = await fetch(`${MINIKIT_USEROP_URL}${userOpHash}`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10000),
+  });
   if (!res.ok) {
     throw new Error(`Failed to resolve user operation: HTTP ${res.status}`);
   }

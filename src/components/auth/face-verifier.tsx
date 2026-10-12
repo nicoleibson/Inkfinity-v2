@@ -177,9 +177,27 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
         }
 
         console.log("Building frames from liveness:", liveness);
-        const primaryFrame = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 0 ? liveness.frames[0] : frame.dataUri;
-        const frame2 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
-        const frame3 = liveness !== "unavailable" && liveness.frames && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
+        let primaryFrame = frame.dataUri;
+        let frame2 = frame.dataUri;
+        let frame3 = frame.dataUri;
+
+        if (liveness !== "unavailable" && liveness.frames && liveness.frames.length >= 3) {
+          primaryFrame = liveness.frames[0];
+          frame2 = liveness.frames[1];
+          frame3 = liveness.frames[2];
+        } else {
+          // If liveness landmarker was unavailable or returned fewer frames, capture discrete
+          // frames spaced ~300ms apart from the live video stream to satisfy anti-spoofing requirements.
+          if (liveness !== "unavailable" && liveness.frames && liveness.frames.length > 0) {
+            primaryFrame = liveness.frames[0];
+          }
+          await new Promise((r) => setTimeout(r, 300));
+          const cap2 = await captureFaceFrame(video, canvas);
+          if (cap2.faceCount === 1) frame2 = cap2.dataUri;
+          await new Promise((r) => setTimeout(r, 300));
+          const cap3 = await captureFaceFrame(video, canvas);
+          if (cap3.faceCount === 1) frame3 = cap3.dataUri;
+        }
         console.log("Frames prepared, calling API...");
 
         // The server re-runs the comparison against the registered scan stored in the

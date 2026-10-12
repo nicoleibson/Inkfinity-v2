@@ -158,6 +158,14 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Three live frames are required.' }, { status: 400 });
   }
 
+  // Prevenir bypass con fotos estáticas duplicadas (mismo frame clonado 3 veces).
+  if (frame1 === frame2 || frame2 === frame3 || frame1 === frame3) {
+    return NextResponse.json(
+      { error: 'Distinct live frames captured moments apart are required.' },
+      { status: 400 },
+    );
+  }
+
   const adminAuth = getAdminAuth();
   const adminDb = getAdminDb();
 
@@ -209,15 +217,18 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let verdict: { isMatch?: boolean; confidence?: number; reason?: string };
   try {
+    lap('loading verify-face flow');
     const { verifyFace } = await import('@/ai/flows/verify-face-flow');
-    verdict = await verifyFace({
+    lap('verify-face flow loaded');
+    verdict = await withTimeout('verifyFace', verifyFace({
       registeredImageUrl: profile.facialScanUrl,
       liveCaptureDataUri: frame1,
       liveCaptureFrame2: frame2,
       liveCaptureFrame3: frame3,
-    });
+    }));
+    lap('verifyFace done');
   } catch (error) {
-    console.error('Server-side face verification failed:', error);
+    console.error(`[face-verified] face verification failed after ${Date.now() - t0}ms:`, error);
     // No registrar como fallo del usuario si el modelo falla por error de infraestructura.
     return NextResponse.json({ error: 'Verification could not be completed.' }, { status: 502 });
   }
@@ -228,7 +239,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   if (!accepted) {
     // FIX 1: Registrar el fallo en el servidor, independientemente del cliente.
-    await registerServerFailure(uid, adminDb);
+    await withTimeout('registerServerFailure', registerServerFailure(uid, adminDb));
+    lap('registerServerFailure done');
     return NextResponse.json(
       {
         success: false,
@@ -241,14 +253,16 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   // Éxito: resetear contadores en el servidor.
-  await resetServerFailures(uid, adminDb);
+  await withTimeout('resetServerFailures', resetServerFailures(uid, adminDb));
+  lap('resetServerFailures done');
 
   const verifiedAt = Date.now();
 
-  await adminAuth.setCustomUserClaims(uid, {
+  await withTimeout('setCustomUserClaims', adminAuth.setCustomUserClaims(uid, {
     faceVerified: true,
     faceVerifiedAt: verifiedAt,
-  });
+  }));
+  lap('setCustomUserClaims done');
 
   const response = NextResponse.json({
     success: true,
