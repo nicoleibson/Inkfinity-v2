@@ -9,6 +9,25 @@ export const dynamic = 'force-dynamic';
 // Vercel's default 10s function limit, which can surface as a 504.
 export const maxDuration = 60;
 
+// Diagnose production 504s: each Firebase/Gemini call is a network round-trip
+// that can hang on a cold serverless instance. A per-step timeout turns an
+// indefinite hang into a fast, labelled error visible in the Vercel logs.
+const STEP_TIMEOUT_MS = 20000;
+
+async function withTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`step timeout: ${label}`)), STEP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // FIX 4: Subido de 0.8 → 0.92. Un 2FA biométrico no puede aceptar
 // similitudes del 80%; se requiere alta certeza.
 const FACE_CONFIDENCE_THRESHOLD = 0.92;
@@ -110,8 +129,17 @@ function isDataUri(value: unknown): value is string {
  * - Failure counter is incremented server-side on every failed attempt.
  */
 export async function POST(request: NextRequest): Promise<Response> {
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[face-verified] ${label}: +${Date.now() - t0}ms`);
+  console.log('[face-verified] env', {
+    hasClientEmail: Boolean(process.env.FIREBASE_CLIENT_EMAIL),
+    hasPrivateKey: Boolean(process.env.FIREBASE_PRIVATE_KEY),
+    hasFaceSecret: Boolean(process.env.FACE_VERIFICATION_SECRET),
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY),
+  });
   const sessionCookie = request.cookies.get('__session')?.value;
   if (!sessionCookie) {
+    console.warn('[face-verified] no __session cookie');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -135,14 +163,17 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let uid: string;
   try {
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie, true));
     uid = decodedClaims.uid;
-  } catch {
+    lap('verifySessionCookie done');
+  } catch (error) {
+    console.error(`[face-verified] session verification failed after ${Date.now() - t0}ms:`, error);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // FIX 1: Verificar el lock en el servidor ANTES de cualquier operación costosa.
-  const lock = await checkServerLock(uid, adminDb);
+  const lock = await withTimeout('checkServerLock', checkServerLock(uid, adminDb));
+  lap('checkServerLock done');
   if (lock.locked) {
     const minutes = Math.ceil(lock.retryAfterMs / 60_000);
     return NextResponse.json(
@@ -151,7 +182,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  const snapshot = await adminDb.ref(`users/${uid}`).get();
+  const snapshot = await withTimeout('profile get', adminDb.ref(`users/${uid}`).get());
+  lap('profile get done');
   if (!snapshot.exists()) {
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
   }
