@@ -202,10 +202,14 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
 
         // The server re-runs the comparison against the registered scan stored in the
         // database and is the only party that decides whether to grant the session.
+        const idToken = await auth.currentUser?.getIdToken();
         const grantResponse = await fetch('/api/auth/face-verified', {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {}),
+          },
           body: JSON.stringify({ frame1: primaryFrame, frame2, frame3 }),
         });
 
@@ -238,10 +242,11 @@ export function FaceVerifier({ onVerificationSuccess, onVerificationFail }: Face
             onVerificationSuccess();
         } else {
             await registerVerificationFailure(uid);
+            const failureReason = grant.reason || grant.error || (grantResponse.status === 401 ? 'Identity could not be confirmed or session expired.' : 'Identity could not be confirmed.');
             toast({
                 variant: 'destructive',
                 title: `Verification Failed (${grantResponse.status})`,
-                description: `${grant.reason ?? grant.error ?? 'Identity could not be confirmed.'}${grantResponse.status === 403 ? ' An active membership is required.' : ''}${grantResponse.status === 401 ? ' (confidence may be below threshold or no match)' : ''}${grantResponse.status === 502 ? ' (infrastructure/model error)' : ''}`,
+                description: `${failureReason}${grantResponse.status === 403 ? ' An active membership is required.' : ''}${grantResponse.status === 502 ? ' (infrastructure/model error)' : ''}`,
             });
             onVerificationFail?.();
         }

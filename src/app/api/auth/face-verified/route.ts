@@ -135,12 +135,21 @@ export async function POST(request: NextRequest): Promise<Response> {
     hasClientEmail: Boolean(process.env.FIREBASE_CLIENT_EMAIL),
     hasPrivateKey: Boolean(process.env.FIREBASE_PRIVATE_KEY),
     hasFaceSecret: Boolean(process.env.FACE_VERIFICATION_SECRET),
-    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY),
+    hasGeminiKey: Boolean(
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY
+    ),
   });
+
+  const authHeader = request.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const sessionCookie = request.cookies.get('__session')?.value;
-  if (!sessionCookie) {
-    console.warn('[face-verified] no __session cookie');
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!sessionCookie && !bearerToken) {
+    console.warn('[face-verified] no __session cookie or Authorization header');
+    return NextResponse.json({ error: 'Unauthorized: Session or token required.' }, { status: 401 });
   }
 
   let body: Record<string, unknown>;
@@ -171,12 +180,23 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let uid: string;
   try {
-    const decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie, true));
-    uid = decodedClaims.uid;
-    lap('verifySessionCookie done');
+    if (bearerToken) {
+      try {
+        const decoded = await withTimeout('verifyIdToken', adminAuth.verifyIdToken(bearerToken));
+        uid = decoded.uid;
+      } catch {
+        // Fallback: in case bearerToken is actually a session cookie
+        const decoded = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(bearerToken, true));
+        uid = decoded.uid;
+      }
+    } else {
+      const decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie!, true));
+      uid = decodedClaims.uid;
+    }
+    lap('auth verification done');
   } catch (error) {
-    console.error(`[face-verified] session verification failed after ${Date.now() - t0}ms:`, error);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    console.error(`[face-verified] auth verification failed after ${Date.now() - t0}ms:`, error);
+    return NextResponse.json({ error: 'Unauthorized: Invalid session or token.' }, { status: 401 });
   }
 
   // FIX 1: Verificar el lock en el servidor ANTES de cualquier operación costosa.
@@ -278,6 +298,28 @@ export async function POST(request: NextRequest): Promise<Response> {
     path: '/',
     maxAge: 60 * 60,
   });
+
+  // Si la petición se autenticó mediante Bearer ID Token y no tenía la cookie __session,
+  // la generamos y seteamos para que las páginas subsiguientes ya la tengan lista.
+  if (!sessionCookie && bearerToken) {
+    try {
+      const expiresIn = 60 * 60 * 24 * 14 * 1000;
+      const newSessionCookie = await withTimeout(
+        'createSessionCookie',
+        adminAuth.createSessionCookie(bearerToken, { expiresIn }),
+      );
+      response.cookies.set('__session', newSessionCookie, {
+        maxAge: 60 * 60 * 24 * 14,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+      lap('fallback session cookie set');
+    } catch (e) {
+      console.warn('[face-verified] could not mint fallback session cookie:', e);
+    }
+  }
 
   return response;
 }

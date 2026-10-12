@@ -23,7 +23,6 @@ function VerifyFaceContent() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setIsAuthenticated(true);
         // Ensure session cookie is set so face-verified API can authenticate
         try {
           const idToken = await user.getIdToken();
@@ -35,6 +34,7 @@ function VerifyFaceContent() {
         } catch (e) {
           console.warn('Failed to set session cookie:', e);
         }
+        setIsAuthenticated(true);
       } else {
         router.push('/login');
       }
