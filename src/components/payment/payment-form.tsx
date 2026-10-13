@@ -189,9 +189,21 @@ export default function PaymentForm() {
     };
 
     const handlePayment = async () => {
-        if (!user || !provider || !isConnected) {
-            toast({ variant: 'destructive', title: "Wallet Not Ready", description: "Please connect your wallet." });
+        if (!user) {
+            toast({ variant: 'destructive', title: "Not Logged In", description: "Please log in to continue." });
             return;
+        }
+
+        if (isInWorldApp()) {
+            if (!walletAddress) {
+                toast({ variant: 'destructive', title: "World Wallet Not Ready", description: "Please connect your World Wallet to continue." });
+                return;
+            }
+        } else {
+            if (!provider || !isConnected) {
+                toast({ variant: 'destructive', title: "Wallet Not Ready", description: "Please connect your wallet." });
+                return;
+            }
         }
 
         const { fee } = getPaymentDetails();
@@ -221,7 +233,11 @@ export default function PaymentForm() {
                     userOpHash = userOp.userOpHash;
                     toast({ title: "Transaction Sent", description: "Waiting for blockchain confirmation..." });
                 } else {
-                const signer = await provider.getSigner(walletAddress ?? undefined);
+                    if (!provider) {
+                        toast({ variant: 'destructive', title: "Wallet Not Ready", description: "Please connect your wallet." });
+                        return;
+                    }
+                    const signer = await provider.getSigner(walletAddress ?? undefined);
                 
                 const txParams: { to: string, value: bigint, maxPriorityFeePerGas?: bigint, maxFeePerGas?: bigint } = {
                     to: PLATFORM_WALLET_ADDRESS,

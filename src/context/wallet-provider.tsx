@@ -90,14 +90,58 @@ async function linkWalletToAccount(newAddress: string): Promise<{ ok: boolean; i
 
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    ensureMiniKitInstalled();
-    setMounted(true);
-  }, []);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const { toast } = useToast();
   const { settings } = usePlatformSettings();
+
+  useEffect(() => {
+    ensureMiniKitInstalled();
+    setMounted(true);
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userRef = ref(database, `users/${user.uid}/walletAddress`);
+          const snapshot = await get(userRef);
+          let linkedAddress: string | null = snapshot.exists() ? snapshot.val() : null;
+
+          if (isInWorldApp()) {
+            const worldAppProvider = getWorldAppProviderOrNull();
+            if (worldAppProvider) {
+              const browserProvider = new BrowserProvider(worldAppProvider);
+              setProvider(browserProvider);
+
+              // If no wallet is linked in the user profile yet, try to auto-detect from World App
+              if (!linkedAddress) {
+                try {
+                  const accounts = (await browserProvider.send("eth_accounts", [])) as string[];
+                  if (accounts && accounts.length > 0) {
+                    const autoAddress = accounts[0];
+                    const { ok } = await linkWalletToAccount(autoAddress);
+                    if (ok) {
+                      linkedAddress = autoAddress;
+                    }
+                  }
+                } catch (e) {
+                  console.warn("Could not auto-read World App accounts:", e);
+                }
+              }
+            }
+          }
+
+          setWalletAddress(linkedAddress);
+        } catch (err) {
+          console.error("Error restoring wallet state:", err);
+        }
+      } else {
+        setWalletAddress(null);
+        setProvider(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
 
 
