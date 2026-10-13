@@ -18,6 +18,34 @@ import type { UserProfile } from "@/types/user";
 import { hasActiveMembership } from "@/lib/utils/membership";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
+function formatAuthError(err: any): string {
+  if (!err) return "An unexpected error occurred. Please try again.";
+  const code = err.code || "";
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-email':
+      return 'Invalid email or password. Please verify your credentials and try again.';
+    case 'auth/too-many-requests':
+      return 'Access to this account has been temporarily disabled due to multiple failed login attempts. Please try again later.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact support.';
+    case 'auth/popup-closed-by-user':
+      return 'The sign-in popup was closed before completing.';
+    case 'auth/popup-blocked':
+      return 'Popup was blocked by your browser. Please allow popups for this site.';
+    case 'auth/network-request-failed':
+      return 'Network connection error. Please check your internet connection.';
+    default:
+      if (typeof err.message === 'string') {
+        const cleaned = err.message.replace(/^Firebase:\s*(Error\s*)?(\(auth\/[^)]+\)\.?\s*)?/i, '').trim();
+        return cleaned || 'Failed to sign in. Please try again.';
+      }
+      return 'An unexpected error occurred. Please try again.';
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -128,7 +156,7 @@ export default function LoginPage() {
 
       await completeLogin(user);
     } catch (err: any) {
-      setError(err.message);
+      setError(formatAuthError(err));
       setLoading(false);
     }
   };
@@ -143,7 +171,7 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, provider);
       await completeLogin(result.user);
     } catch (err: any) {
-      setError(err.message);
+      setError(formatAuthError(err));
       setLoading(false);
     }
   };
@@ -200,7 +228,7 @@ export default function LoginPage() {
       const user = auth.currentUser;
       if (user) await completeLogin(user);
     } catch (err: any) {
-      setError(err.message);
+      setError(formatAuthError(err));
       setLoading(false);
     }
   };
@@ -247,7 +275,7 @@ export default function LoginPage() {
           toast({ variant: "destructive", title: "Failed", description: fallbackErr.message });
         }
       } else {
-        toast({ variant: "destructive", title: "Failed", description: err.message });
+        toast({ variant: "destructive", title: "Failed", description: formatAuthError(err) });
       }
     } finally {
       setForgotLoading(false);
