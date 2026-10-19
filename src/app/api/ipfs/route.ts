@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import bs58 from "bs58";
 import { getAdminStorage, getArtworkBucketName, getPublicStorageUrl } from "@/lib/firebase-admin";
+export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
+
 
 // In-memory cache of recently processed assets for fast local serving.
 // It is a cache, NOT the source of truth: durability comes from Cloud Storage.

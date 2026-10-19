@@ -5,6 +5,9 @@ import { getAuth } from 'firebase-admin/auth';
 import { verifyWorldIdProof, normalizeNullifier } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
 
 /**
  * Signs in an existing user using a World ID proof.

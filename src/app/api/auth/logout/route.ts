@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
+
 
 /**
  * Clears the server-side session and the signed facial-verification cookies.

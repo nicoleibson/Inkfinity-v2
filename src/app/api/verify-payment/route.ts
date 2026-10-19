@@ -13,6 +13,9 @@ import { addressSet } from '@/lib/server/address';
 import { claimPaymentOnce, sanitizeClaimKey } from '@/lib/server/payment-claim';
 
 export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
 
 const PLATFORM_WALLET = (
   process.env.NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS ||

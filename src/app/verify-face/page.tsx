@@ -23,18 +23,20 @@ function VerifyFaceContent() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Ensure session cookie is set so face-verified API can authenticate
-        try {
-          const idToken = await user.getIdToken();
-          await fetch('/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
-          });
-        } catch (e) {
-          console.warn('Failed to set session cookie:', e);
-        }
         setIsAuthenticated(true);
+        // Ensure session cookie is set so face-verified API can authenticate (no bloquear UI).
+        (async () => {
+          try {
+            const idToken = await user.getIdToken();
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken }),
+            });
+          } catch (e) {
+            console.warn('Failed to set session cookie:', e);
+          }
+        })();
       } else {
         router.push('/login');
       }

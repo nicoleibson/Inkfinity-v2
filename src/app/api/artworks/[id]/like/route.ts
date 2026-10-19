@@ -3,6 +3,9 @@ import { ServerValue } from 'firebase-admin/database';
 import { getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {

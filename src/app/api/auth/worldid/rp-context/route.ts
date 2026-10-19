@@ -3,6 +3,10 @@ import { signRequest } from '@worldcoin/idkit-core/signing';
 import { WORLD_ID_ACTION, getWorldIdRpId, getWorldIdSigningKey, getWorldIdEnvironment } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
+
 
 /**
  * Public RP context endpoint for World ID authentication flows (login/signup).

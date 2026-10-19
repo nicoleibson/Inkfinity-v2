@@ -9,6 +9,8 @@ import {
 } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 
 /**
  * Issues the RP signature that World ID 4.0 requires on every proof request.
