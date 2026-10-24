@@ -32,6 +32,7 @@ function VerifyFaceContent() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ idToken }),
+              signal: AbortSignal.timeout(10000),
             });
           } catch (e) {
             console.warn('Failed to set session cookie:', e);
