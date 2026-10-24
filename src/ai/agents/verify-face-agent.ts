@@ -1,7 +1,7 @@
 // src/ai/agents/verify-face-agent.ts
 'use server';
 /**
- * @fileOverview Defines the AI agent for facial comparison using Gemini 2.5 Flash-Lite.
+ * @fileOverview Defines the AI agent for facial comparison using Gemini 3.8 Flash.
  */
 
 import {ai} from '@/ai/genkit';
@@ -10,7 +10,7 @@ import { VerifyFaceInputSchema, VerifyFaceOutputSchema } from '@/ai/schemas/veri
 
 const prompt = ai.definePrompt({
   name: 'verifyFacePrompt',
-  model: 'googleai/gemini-3.5-flash-lite',
+  model: 'googleai/gemini-3.8-flash',
   input: {schema: VerifyFaceInputSchema},
   output: {schema: VerifyFaceOutputSchema},
   prompt: `You are a highly advanced AI security expert specializing in biometric face verification. Your task is to determine if the person in the live captures is the same person as in the registered facial scan.
