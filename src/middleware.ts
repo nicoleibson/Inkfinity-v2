@@ -10,6 +10,10 @@ const PUBLIC_PATHS = [
   '/forgot-password',
   '/verify-face',
   '/verify-face/email-link',
+  '/about',
+  '/terms',
+  '/search',
+  '/artwork',
   '/api/auth',
   '/api/worldid',
   '/api/verify-payment',
@@ -24,9 +28,9 @@ const STATIC_EXTENSIONS = ['.ico', '.png', '.jpg', '.jpeg', '.svg', '.css', '.js
 const FACE_GRANT_COOKIES = ['face_req_signed', 'face_verified_signed'];
 
 function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return true;
+  if (pathname === '/') return true;
   if (STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext))) return true;
-  return false;
+  return PUBLIC_PATHS.some(p => p !== '/' && (pathname === p || pathname.startsWith(p + '/')));
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
