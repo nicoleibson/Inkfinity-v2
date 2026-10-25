@@ -1,15 +1,15 @@
 // src/app/api/storage/route.ts
 // Local storage adapter: writes images into the project's public/uploads folder
 // so Next.js can serve them statically for all users. Temporarily replaces Firebase Storage.
-export const runtime = 'nodejs';
-// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
-// function limit, which surfaces as a 504 Gateway Timeout.
-export const maxDuration = 60;
-
 
 import { NextRequest, NextResponse } from "next/server";
 import { mkdir, writeFile, unlink, stat } from "fs/promises";
 import path from "path";
+
+export const runtime = 'nodejs';
+// Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
+// function limit, which surfaces as a 504 Gateway Timeout.
+export const maxDuration = 60;
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 

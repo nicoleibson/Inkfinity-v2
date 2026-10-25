@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import bs58 from "bs58";
 import { getAdminStorage, getArtworkBucketName, getPublicStorageUrl } from "@/lib/firebase-admin";
+
 export const runtime = 'nodejs';
 // Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
 // function limit, which surfaces as a 504 Gateway Timeout.
