@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,9 @@ function formatAuthError(err: any): string {
   }
 }
 
-export default function LoginPage() {
+import { Suspense } from "react";
+
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -57,10 +59,13 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const searchParams = useSearchParams();
+  const redirectPath = searchParams.get('redirect') || '/';
+
   // Helper to create session cookie after successful auth
   const createSessionCookie = async (user: any) => {
     try {
-      const idToken = await user.getIdToken();
+      const idToken = await user.getIdToken(true);
       const response = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,7 +73,7 @@ export default function LoginPage() {
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) {
-        console.error('Failed to create session cookie');
+        console.error('Failed to create session cookie:', response.status);
       }
     } catch (err) {
       console.error('Failed to create session cookie:', err);
@@ -76,8 +81,9 @@ export default function LoginPage() {
   };
 
   const completeLogin = async (user: any) => {
-    // Start session creation in background (don't block navigation)
-    createSessionCookie(user).catch(() => {});
+    // Esperar a que la cookie __session se establezca en el navegador antes de navegar
+    // para que el middleware no rechace las rutas privadas.
+    await createSessionCookie(user);
 
     try {
       // Check user profile for status and 2FA
@@ -87,7 +93,7 @@ export default function LoginPage() {
       if (!snapshot.exists()) {
         toast({ variant: 'destructive', title: "Profile Incomplete", description: "Please complete your profile setup." });
         setLoading(false);
-        setTimeout(() => router.replace('/signup'), 0);
+        router.replace('/signup');
         return;
       }
 
@@ -98,13 +104,13 @@ export default function LoginPage() {
       if (isTrialExpired && profile.status !== 'pending_payment') {
         await update(userRef, { status: 'pending_payment' });
         setLoading(false);
-        setTimeout(() => router.replace('/payment'), 0);
+        router.replace('/payment');
         return;
       }
 
       if (profile.status === 'pending_payment') {
         setLoading(false);
-        setTimeout(() => router.replace('/payment'), 0);
+        router.replace('/payment');
         return;
       }
 
@@ -113,7 +119,10 @@ export default function LoginPage() {
       // verify-face page would reject them and bounce them back.
       if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
         setLoading(false);
-        setTimeout(() => router.replace('/verify-face'), 0);
+        const verifyUrl = redirectPath && redirectPath !== '/' 
+          ? `/verify-face?redirect=${encodeURIComponent(redirectPath)}` 
+          : '/verify-face';
+        router.replace(verifyUrl);
       } else {
         // Si el usuario tiene 2FA habilitado pero no tiene facialScanUrl registrado
         // y tiene membresía activa, sugerir registrarse ahora
@@ -125,16 +134,12 @@ export default function LoginPage() {
         }
         toast({ title: "Login Successful", description: message });
         setLoading(false);
-        setTimeout(() => router.replace("/"), 0);
+        router.replace(redirectPath);
       }
     } catch (err: any) {
       console.error('completeLogin error:', err);
       setLoading(false);
-      setTimeout(() => {
-        try {
-          router.replace('/');
-        } catch {}
-      }, 0);
+      router.replace(redirectPath);
     }
   };
 
@@ -370,5 +375,13 @@ export default function LoginPage() {
         </CardFooter>
       </form>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

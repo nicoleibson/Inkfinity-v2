@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/verify-face/email-link',
   '/about',
   '/terms',
+  '/privacy',
   '/search',
   '/artwork',
   '/api/auth',
