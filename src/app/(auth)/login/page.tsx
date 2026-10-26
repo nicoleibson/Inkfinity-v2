@@ -193,7 +193,10 @@ function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!rpResponse.ok) throw new Error(`RP context failed (${rpResponse.status})`);
+      if (!rpResponse.ok) {
+        const errorData = await rpResponse.json().catch(() => null);
+        throw new Error(errorData?.detail || errorData?.error || `RP context failed (${rpResponse.status})`);
+      }
       const rp = await rpResponse.json();
 
       const request = await IDKit.request({

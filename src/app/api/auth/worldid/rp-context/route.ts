@@ -18,8 +18,21 @@ export async function POST(request: NextRequest): Promise<Response> {
   const signingKey = getWorldIdSigningKey();
 
   if (!rpId || !signingKey) {
+    const rawRp = process.env.WORLD_ID_RP_ID || process.env.WORLD_RP_ID || '';
+    const rawKey = process.env.RP_SIGNING_KEY || '';
+    console.error('[rp-context] Missing configuration:', {
+      hasRpId: Boolean(rpId),
+      rawRpIdLength: rawRp.length,
+      hasSigningKey: Boolean(signingKey),
+      rawKeyLength: rawKey.length,
+    });
     return NextResponse.json(
-      { error: 'WORLDID_UNAVAILABLE', detail: 'World ID is not configured on this server.' },
+      {
+        error: 'WORLDID_UNAVAILABLE',
+        detail: !rpId
+          ? 'Missing or invalid WORLD_RP_ID (must start with rp_)'
+          : 'Missing or invalid RP_SIGNING_KEY (must be 64-char hex key)',
+      },
       { status: 503 },
     );
   }
@@ -38,9 +51,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       signature: sig,
       environment: getWorldIdEnvironment(),
     });
-  } catch {
+  } catch (err: any) {
+    console.error('[rp-context] signRequest error:', err);
     return NextResponse.json(
-      { error: 'WORLDID_UNAVAILABLE', detail: 'Could not sign the World ID request.' },
+      { error: 'WORLDID_UNAVAILABLE', detail: `Could not sign the World ID request: ${err?.message || err}` },
       { status: 503 },
     );
   }
