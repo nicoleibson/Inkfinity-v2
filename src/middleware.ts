@@ -23,6 +23,8 @@ const PUBLIC_PATHS = [
   '/_static',
   '/favicon.ico',
   '/robots.txt',
+  '/manifest.webmanifest',
+  '/manifest',
 ];
 
 const STATIC_EXTENSIONS = ['.ico', '.png', '.jpg', '.jpeg', '.svg', '.css', '.js', '.woff', '.woff2', '.ttf', '.eot'];

@@ -70,7 +70,7 @@ function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(30000),
       });
       if (!response.ok) {
         console.error('Failed to create session cookie:', response.status);
