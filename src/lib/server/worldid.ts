@@ -61,7 +61,12 @@ export function getWorldIdRpId(): string | null {
  * WORLDID_UNAVAILABLE rather than letting an unverified flow proceed.
  */
 export function getWorldIdSigningKey(): string | null {
-  const key = (process.env.RP_SIGNING_KEY || '').trim();
+  let key = (process.env.RP_SIGNING_KEY || '').trim();
+  // Quitar comillas si fueron agregadas accidentalmente en el panel de entorno
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+  // Una clave privada hexadecimal de 32 bytes tiene 64 caracteres hex (o 66 con prefijo 0x)
   return /^0x?[0-9a-fA-F]{64}$/.test(key) ? key : null;
 }
 

@@ -30,8 +30,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       {
         error: 'WORLDID_UNAVAILABLE',
         detail: !rpId
-          ? 'Missing or invalid WORLD_RP_ID (must start with rp_)'
-          : 'Missing or invalid RP_SIGNING_KEY (must be 64-char hex key)',
+          ? `Missing or invalid WORLD_RP_ID (received length: ${rawRp.length})`
+          : `Missing or invalid RP_SIGNING_KEY (received length: ${rawKey.length}, expected 64 or 66 chars with 0x)`,
       },
       { status: 503 },
     );
