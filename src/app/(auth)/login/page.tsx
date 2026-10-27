@@ -17,6 +17,7 @@ import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 import { hasActiveMembership } from "@/lib/utils/membership";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { saveProof } from '@/utils/worldid-proof';
 
 function formatAuthError(err: any): string {
   if (!err) return "An unexpected error occurred. Please try again.";
@@ -183,7 +184,7 @@ function LoginForm() {
     }
   };
 
-import { saveProof } from '@/utils/worldid-proof';
+
   const [unlinked, setUnlinked] = useState(false);
 
   const handleWorldIdLogin = async () => {
@@ -256,8 +257,8 @@ import { saveProof } from '@/utils/worldid-proof';
 
 
 
-    try {
-      const { IDKit, orbLegacy } = await import('@worldcoin/idkit');
+
+
 
       // Get RP context from public endpoint (no auth required for login flow)
       const rpResponse = await fetch('/api/auth/worldid/rp-context', {
