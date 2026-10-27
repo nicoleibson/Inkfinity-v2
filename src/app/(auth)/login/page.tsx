@@ -71,6 +71,7 @@ function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
         signal: AbortSignal.timeout(30000),
+        credentials: 'include', // ensure HttpOnly cookie is sent
       });
       if (!response.ok) {
         console.error('Failed to create session cookie:', response.status);
@@ -182,9 +183,79 @@ function LoginForm() {
     }
   };
 
+import { saveProof } from '@/utils/worldid-proof';
+  const [unlinked, setUnlinked] = useState(false);
+
   const handleWorldIdLogin = async () => {
     setLoading(true);
     setError(null);
+    try {
+      const { IDKit, orbLegacy } = await import('@worldcoin/idkit');
+
+      // Get RP context from public endpoint (no auth required for login flow)
+      const rpResponse = await fetch('/api/auth/worldid/rp-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!rpResponse.ok) {
+        const errorData = await rpResponse.json().catch(() => null);
+        throw new Error(errorData?.detail || errorData?.error || `RP context failed (${rpResponse.status})`);
+      }
+      const rp = await rpResponse.json();
+
+      const request = await IDKit.request({
+        app_id: (process.env.NEXT_PUBLIC_WORLD_APP_ID || '') as `app_${string}`,
+        action: 'inkfinity-auth',
+        rp_context: {
+          rp_id: rp.rp_id,
+          nonce: rp.nonce,
+          created_at: rp.created_at,
+          expires_at: rp.expires_at,
+          signature: rp.signature,
+        },
+        allow_legacy_proofs: true,
+        environment: rp.environment,
+      }).preset(orbLegacy());
+
+      const completion = await request.pollUntilCompletion({ timeout: 120000 });
+      if (!completion.success) {
+        throw new Error(completion.error || 'Verification was not completed.');
+      }
+
+      // Save proof for potential signup flow
+      saveProof(completion.result);
+
+      // Send to login endpoint
+      const loginResponse = await fetch('/api/auth/worldid/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idkitResponse: completion.result }),
+      });
+
+      if (!loginResponse.ok) {
+        if (loginResponse.status === 404) {
+          // Unlinked World ID
+          setUnlinked(true);
+          return;
+        }
+        const body = await loginResponse.json().catch(() => null);
+        throw new Error(body?.detail || body?.error || 'World ID login failed.');
+      }
+
+      const { customToken } = await loginResponse.json();
+      await signInWithCustomToken(auth, customToken);
+
+      // After sign-in, complete login flow
+      const user = auth.currentUser;
+      if (user) await completeLogin(user);
+    } catch (err: any) {
+      setError(formatAuthError(err));
+      setLoading(false);
+    }
+  };
+
+
+
     try {
       const { IDKit, orbLegacy } = await import('@worldcoin/idkit');
 
