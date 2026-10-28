@@ -260,8 +260,8 @@ function LoginForm() {
 
 
 
-      // Get RP context from public endpoint (no auth required for login flow)
-      const rpResponse = await fetch('/api/auth/worldid/rp-context', {
+
+/*
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -312,7 +312,7 @@ function LoginForm() {
       setError(formatAuthError(err));
       setLoading(false);
     }
-  };
+  }; */
 
   const handleResendVerification = async () => {
     const user = auth.currentUser;
