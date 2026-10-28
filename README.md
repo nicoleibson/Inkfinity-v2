@@ -25,7 +25,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Booking & Scheduling System:** Clients can book appointments with artists, who can manage their requests and availability settings through a dedicated dashboard.
 *   **Admin-to-User Chat:** Real-time messaging restricted to communication between administrators and users for platform support. Users contact each other via their social media links (WhatsApp, Instagram, Telegram) displayed on their profiles.
 *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings (including the active blockchain network), and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
-*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. Optional **facial scan 2FA** uses a multi-layer chain: client-side face detection (MediaPipe), liveness detection (blink + head motion), a 3-frame AI comparison with confidence scoring (Genkit/Gemini, acceptance ≥ 0.92), **server-side** escalating rate limiting, an HMAC-signed httpOnly grant re-verified on the server, and an email-link fallback. See [`docs/FACIAL_VERIFICATION.md`](docs/FACIAL_VERIFICATION.md).
+*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. **World ID** is now used for 2FA, replacing the previous facial‑scan flow. See [`docs/WORLD_ID_INTEGRATION.md`](docs/WORLD_ID_INTEGRATION.md).
 
 ## Tech Stack
 

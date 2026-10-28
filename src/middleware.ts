@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-// import { verifyFaceRequirement, verifyFaceVerified } from '@/lib/crypto/hmac';
-import { hasActiveMembership } from '@/lib/utils/membership';
 
-// Public routes that do not require authentication
 const PUBLIC_PATHS = [
   '/',
   '/login',
@@ -24,7 +21,6 @@ const PUBLIC_PATHS = [
   '/settings',
   '/upload',
   '/uploads',
-  '/[username]', // dynamic profile pages
   '/api/auth',
   '/api/worldid',
   '/api/verify-payment',
@@ -39,10 +35,31 @@ const PUBLIC_PATHS = [
 
 const STATIC_EXTENSIONS = ['.ico', '.png', '.jpg', '.jpeg', '.svg', '.css', '.js', '.woff', '.woff2', '.ttf', '.eot'];
 
+// Segments that belong to private/authenticated sections
+const PRIVATE_SEGMENTS = [
+  'admin',
+];
+
 function isPublicPath(pathname: string): boolean {
+  // Root
   if (pathname === '/') return true;
+
+  // Static assets by extension
   if (STATIC_EXTENSIONS.some(ext => pathname.endsWith(ext))) return true;
-  return PUBLIC_PATHS.some(p => p !== '/' && (pathname === p || pathname.startsWith(p + '/')));
+
+  // Explicit public path prefixes
+  if (PUBLIC_PATHS.some(p => p !== '/' && (pathname === p || pathname.startsWith(p + '/')))) {
+    return true;
+  }
+
+  // Any top-level single-segment path not explicitly private is treated as a
+  // public dynamic profile page (e.g. /john, /studio-xyz).
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length >= 1 && !PRIVATE_SEGMENTS.includes(segments[0])) {
+    return true;
+  }
+
+  return false;
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
@@ -54,7 +71,6 @@ function redirectToLogin(request: NextRequest): NextResponse {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Allow public paths without authentication
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
@@ -84,7 +100,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // Session is valid – allow request to continue
     return NextResponse.next();
   } catch (error) {
     console.warn('[middleware] session verification error:', error);
