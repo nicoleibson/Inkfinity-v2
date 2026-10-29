@@ -84,18 +84,19 @@ export async function POST(request: NextRequest): Promise<Response> {
       Boolean(profile?.facialScanUrl) &&
       hasActiveMembership(profile);
     if (needsFaceVerification) {
-      // Matched to the __session lifetime. The cookie is signed and only minted here
-      // from the server-read profile, so a longer life does not widen the bypass: a
-      // lapsed membership keeps 2FA enforced until the session itself ends.
-      const faceReqExpires = Date.now() + 60 * 60 * 24 * 14 * 1000;
-      const signedFaceReq = await signFaceRequirement(uid, true, faceReqExpires);
-      response.cookies.set('face_req_signed', signedFaceReq, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 14,
-      });
+      try {
+        const faceReqExpires = Date.now() + 60 * 60 * 24 * 14 * 1000;
+        const signedFaceReq = await signFaceRequirement(uid, true, faceReqExpires);
+        response.cookies.set('face_req_signed', signedFaceReq, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 14,
+        });
+      } catch (faceErr) {
+        console.warn('[session] could not sign face requirement:', faceErr);
+      }
     } else {
       // Clear face requirement if not needed
       response.cookies.set('face_req_signed', '', {
@@ -116,8 +117,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[session] failed after ${Date.now() - t0}ms:`, error);
-    return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
+    const message = error?.message || 'Failed to create session';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

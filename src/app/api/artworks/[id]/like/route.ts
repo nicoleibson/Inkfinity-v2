@@ -7,6 +7,22 @@ export const runtime = 'nodejs';
 // function limit, which surfaces as a 504 Gateway Timeout.
 export const maxDuration = 60;
 
+const STEP_TIMEOUT_MS = 10000;
+
+async function withTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`step timeout: ${label}`)), STEP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     let artworkId = '';
@@ -29,7 +45,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const db = getAdminDb();
-    const artworkSnap = await db.ref(`artworks/${artworkId}`).get();
+    const artworkSnap = await withTimeout('getArtwork', db.ref(`artworks/${artworkId}`).get());
     if (!artworkSnap.exists()) {
       return NextResponse.json({ success: false, error: 'Artwork not found.' }, { status: 404 });
     }
@@ -44,7 +60,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const likeRef = db.ref(`artworks/${artworkId}/likes/${userId}`);
-    const existing = await likeRef.get();
+    const existing = await withTimeout('checkExistingLike', likeRef.get());
     if (existing.exists()) {
       return NextResponse.json({ success: true, alreadyLiked: true, message: 'Artwork already liked.' });
     }
@@ -69,10 +85,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       };
     }
 
-    await db.ref().update(updates);
+    await withTimeout('updateLike', db.ref().update(updates));
     return NextResponse.json({ success: true, liked: true, likesCount: (artwork.likesCount || 0) + 1, artistEarnedPoints: 10 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[artworks/like] unexpected error:', error);
-    return NextResponse.json({ success: false, error: 'Internal server error.' }, { status: 500 });
+    const errorMessage = error?.message?.includes('step timeout')
+      ? 'Database operation timed out. Please try again.'
+      : 'Internal server error.';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
