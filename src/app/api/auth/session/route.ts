@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
-import { signFaceRequirement } from '@/lib/crypto/hmac';
-import { hasActiveMembership } from '@/lib/utils/membership';
 
 export const runtime = 'nodejs';
 // Firebase Admin cold start + Google Auth/RTDB round-trips can exceed Vercel's
@@ -37,7 +35,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     dbUrl: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ?? null,
     hasClientEmail: Boolean(process.env.FIREBASE_CLIENT_EMAIL),
     hasPrivateKey: Boolean(process.env.FIREBASE_PRIVATE_KEY),
-    hasFaceSecret: Boolean(process.env.FACE_VERIFICATION_SECRET),
   });
   try {
     const body = await request.json();
@@ -77,36 +74,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Set cookie
     const response = NextResponse.json({ success: true });
-
-    // Determine if facial verification is required (only if user has 2FA enabled AND has active membership)
-    const needsFaceVerification =
-      profile?.twoFactorEnabled === true &&
-      Boolean(profile?.facialScanUrl) &&
-      hasActiveMembership(profile);
-    if (needsFaceVerification) {
-      try {
-        const faceReqExpires = Date.now() + 60 * 60 * 24 * 14 * 1000;
-        const signedFaceReq = await signFaceRequirement(uid, true, faceReqExpires);
-        response.cookies.set('face_req_signed', signedFaceReq, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 60 * 24 * 14,
-        });
-      } catch (faceErr) {
-        console.warn('[session] could not sign face requirement:', faceErr);
-      }
-    } else {
-      // Clear face requirement if not needed
-      response.cookies.set('face_req_signed', '', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 0,
-      });
-    }
 
     response.cookies.set('__session', sessionCookie, {
       maxAge: 60 * 60 * 24 * 14, // 14 days in seconds

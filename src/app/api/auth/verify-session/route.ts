@@ -54,7 +54,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'No session cookie' }, { status: 400 });
   }
 
-  let decodedClaims: { uid: string; faceVerified?: boolean; faceVerifiedAt?: number };
+  let decodedClaims: { uid: string };
   try {
     const adminAuth = getAdminAuth();
     decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie, true));
@@ -81,8 +81,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({
       uid,
       profile: snapshot.val(),
-      faceVerified: decodedClaims.faceVerified === true,
-      faceVerifiedAt: decodedClaims.faceVerifiedAt,
     });
   } catch (error) {
     // The session itself is fine; the profile lookup failed. Report a degraded

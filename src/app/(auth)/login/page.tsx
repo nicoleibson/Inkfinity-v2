@@ -15,12 +15,9 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signIn
 import { useToast } from "@/hooks/use-toast";
 import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
-import { hasActiveMembership } from "@/lib/utils/membership";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { saveProof } from '@/utils/worldid-proof';
 
 function formatAuthError(err: any): string {
-  if (!err) return "An unexpected error occurred. Please try again.";
   const code = err.code || "";
   switch (code) {
     case 'auth/invalid-credential':
@@ -116,28 +113,10 @@ function LoginForm() {
         return;
       }
 
-      // Facial verification is only enforced for members with an active paid
-      // membership, so it must not be requested from anyone else here: the
-      // verify-face page would reject them and bounce them back.
-      if (profile.twoFactorEnabled && profile.facialScanUrl && hasActiveMembership(profile)) {
-        setLoading(false);
-        const verifyUrl = redirectPath && redirectPath !== '/' 
-          ? `/verify-face?redirect=${encodeURIComponent(redirectPath)}` 
-          : '/verify-face';
-        router.replace(verifyUrl);
-      } else {
-        // Si el usuario tiene 2FA habilitado pero no tiene facialScanUrl registrado
-        // y tiene membresía activa, sugerir registrarse ahora
-        const has2FANoScan = profile?.twoFactorEnabled === true && !profile.facialScanUrl && hasActiveMembership(profile);
-        const baseMessage = "Welcome back to Inkfinity!";
-        let message = baseMessage;
-        if (has2FANoScan) {
-          message = "¡Bienvenido de nuevo a Inkfinity! Para continuar, completa tu verificación facial en la configuración.";
-        }
-        toast({ title: "Login Successful", description: message });
-        setLoading(false);
-        router.replace(redirectPath);
-      }
+      const baseMessage = "Welcome back to Inkfinity!";
+      toast({ title: "Login Successful", description: baseMessage });
+      setLoading(false);
+      router.replace(redirectPath);
     } catch (err: any) {
       console.error('completeLogin error:', err);
       setLoading(false);

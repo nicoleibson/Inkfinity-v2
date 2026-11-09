@@ -8,7 +8,8 @@ import { ref, get, update, increment, query, orderByChild, equalTo, onValue, ser
 import ArtworkCard from '@/components/artwork-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Link as LinkIcon, UserPlus, Loader2, UserMinus, Lock, MessageSquare, Building, Star, Twitter, Instagram, Package, Gem, Users, LayoutGrid, BookUser, MessageCircle, Send } from 'lucide-react';
+import { MapPin, Link as LinkIcon, UserPlus, Loader2, UserMinus, Lock, MessageSquare, Building, Star, Twitter, Instagram, Package, Gem, Users, LayoutGrid, BookUser, MessageCircle, Send, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Artwork } from '@/types/artwork';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -375,9 +376,19 @@ export default function UserProfilePage() {
                 </Avatar>
                 <div className="flex-grow flex flex-col md:flex-row items-center md:items-end justify-between gap-4 w-full">
                   <div className="flex-grow text-center md:text-left mt-4 md:mt-0">
-                    <div className="flex items-center justify-center md:justify-start gap-2">
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
                         <h1 className="text-3xl font-headline font-bold">{profileUser.name}</h1>
                         {profileUser.isPrivate && <Lock className="w-5 h-5 text-muted-foreground" />}
+                        {profileUser.worldIdVerified && (
+                          <Badge 
+                            variant="secondary" 
+                            className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                            title="Humanidad verificada mediante World ID"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>World ID Verified</span>
+                          </Badge>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 justify-center md:justify-start">
                         <p className="text-primary">@{profileUser.username}</p>

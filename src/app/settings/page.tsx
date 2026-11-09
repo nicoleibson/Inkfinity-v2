@@ -9,24 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Shield, Lock, Loader2, Camera, ShieldCheck, ShieldX, Upload, UserCheck, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud, RotateCcw } from 'lucide-react';
+import { User, Shield, Lock, Loader2, Upload, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
-import { verifyFace } from '@/ai/flows/verify-face-flow';
-import type { VerifyFaceOutput } from '@/ai/schemas/verify-face-schema';
 import { geocodeAddress } from '@/ai/flows/geocode-address-flow';
 import { auth, database } from '@/lib/firebase-config';
 import { onAuthStateChanged, User as FirebaseUser, updateProfile as updateAuthProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user';
 import { hasActiveMembership } from '@/lib/utils/membership';
 import { get, ref, update, onValue } from 'firebase/database';
-import { requestCamera, cameraErrorTitle, cameraErrorDescription } from '@/lib/client/camera';
-import type { CameraDiagnostics } from '@/lib/client/camera';
 import WorldIdVerification from './world-id-verification';
-
-const FACE_CONFIDENCE_THRESHOLD = 0.8;
-import { getVerificationLock, registerVerificationFailure, resetVerificationFailures, formatRetryTime } from '@/lib/face-lock';
 import Image from 'next/image';
 import { useWallet } from '@/context/wallet-provider';
 import { SessionManagement } from './session-management';
@@ -48,11 +40,8 @@ import {
   uploadProfileImageToGoogleDrive,
   authorizeGoogleDrive,
   getCachedDriveAccessToken,
-  clearDriveAccessToken,
-  getDriveFolderUrl,
   deleteOldUserMedia,
 } from '@/lib/google-drive';
-import { captureFaceFrame, captureLiveSequence } from '@/lib/client/face-capture';
 
 export default function SettingsPage() {
   const [currentUser, setCurrentUser] = React.useState<FirebaseUser | null>(null);
@@ -79,14 +68,7 @@ export default function SettingsPage() {
   
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
 
-  const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
-  const [cameraError, setCameraError] = React.useState<CameraDiagnostics | null>(null);
-  const [cameraRetryKey, setCameraRetryKey] = React.useState(0);
-  const [isProcessingFace, setIsProcessingFace] = React.useState(false);
-  const [verificationResult, setVerificationResult] = React.useState<VerifyFaceOutput | null>(null);
-  const [showCameraRegister, setShowCameraRegister] = React.useState(false);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
   const { toast } = useToast();
   const { walletAddress, disconnectWallet, isConnected, connectWallet } = useWallet();
 
@@ -543,174 +525,7 @@ export default function SettingsPage() {
   };
 
 
-  const handle2FAToggle = async (enabled: boolean) => {
-    if (!currentUser) return;
-    if (enabled && !hasActiveMembership(profile)) {
-      toast({
-        variant: 'destructive',
-        title: 'Membership Required',
-        description: 'You need an active membership to enable facial verification.',
-      });
-      return;
-    }
-    setProfile(prev => ({...prev, twoFactorEnabled: enabled}));
 
-    const userRef = ref(database, `users/${currentUser.uid}`);
-    try {
-        await update(userRef, { twoFactorEnabled: enabled });
-        toast({
-            title: `Facial Scan ${enabled ? 'Enabled' : 'Disabled'}`,
-            description: `Two-factor authentication has been ${enabled ? 'activated' : 'deactivated'}.`,
-        });
-        if (!enabled) {
-            setVerificationResult(null);
-        }
-    } catch (error) {
-        console.error('2FA toggle error:', error);
-        toast({ variant: 'destructive', title: 'Update Failed' });
-        setProfile(prev => ({...prev, twoFactorEnabled: !enabled}));
-    }
-  };
-  
-  React.useEffect(() => {
-    let stream: MediaStream | null = null;
-    const getCameraPermission = async () => {
-      if (profile.twoFactorEnabled) {
-        const result = await requestCamera();
-        if (result.ok) {
-          stream = result.stream;
-          setHasCameraPermission(true);
-          setCameraError(null);
-          if (videoRef.current) {
-            videoRef.current.srcObject = result.stream;
-          }
-        } else {
-          console.error('Error accessing camera:', result.diagnostics);
-          setHasCameraPermission(false);
-          setCameraError(result.diagnostics);
-          toast({
-            variant: 'destructive',
-            title: cameraErrorTitle(result.diagnostics.error),
-            description: cameraErrorDescription(result.diagnostics.error),
-          });
-        }
-      }
-    };
-    getCameraPermission();
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    }
-  }, [profile.twoFactorEnabled, toast, cameraRetryKey]);
-
-  const captureAndProcessFace = async (action: 'register' | 'verify') => {
-    if (!videoRef.current || !currentUser) return;
-    setIsProcessingFace(true);
-    setVerificationResult(null);
-
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (canvas && video) {
-      try {
-        const frame = await captureFaceFrame(video, canvas);
-
-        if (frame.faceCount === 0) {
-          toast({ variant: 'destructive', title: 'No Face Detected', description: 'A face must be clearly visible in the frame to continue.' });
-          return;
-        }
-        if (frame.faceCount > 1) {
-          toast({ variant: 'destructive', title: 'Multiple Faces Detected', description: 'Only one person should be in the frame.' });
-          return;
-        }
-
-        if (action === 'register') {
-            const liveness = await captureLiveSequence(video, canvas);
-            let facialScanUrl = frame.dataUri;
-            if (liveness !== "unavailable") {
-              if (!liveness.isLive) {
-                toast({ variant: 'destructive', title: 'Liveness Check Failed', description: liveness.reason });
-                return;
-              }
-              if (liveness.frames.length > 0) facialScanUrl = liveness.frames[0];
-            } else {
-              console.warn("Liveness model unavailable, skipping liveness check.");
-            }
-
-            const updates: Partial<UserProfile> = { facialScanUrl };
-            await update(ref(database, `users/${currentUser.uid}`), updates);
-            setProfile(prev => ({...prev, ...updates}));
-
-            toast({ title: 'Face Registered', description: 'Your facial scan has been securely saved.' });
-        } else if (action === 'verify') {
-          if (!profile.facialScanUrl) {
-            toast({ variant: 'destructive', title: 'No Face Registered', description: 'Please register your face first.' });
-            return;
-          }
-
-          const lock = await getVerificationLock(currentUser.uid);
-          if (!lock.allowed) {
-            toast({ variant: 'destructive', title: 'Too Many Attempts', description: `Try again in ${formatRetryTime(lock.retryAfterMs)}.` });
-            return;
-          }
-
-          // Liveness gate.
-          const liveness = await captureLiveSequence(video, canvas);
-          let liveDataUri = frame.dataUri;
-          if (liveness !== "unavailable") {
-            if (!liveness.isLive) {
-              await registerVerificationFailure(currentUser.uid);
-              toast({ variant: 'destructive', title: 'Liveness Check Failed', description: liveness.reason });
-              return;
-            }
-            if (liveness.frames.length > 0) liveDataUri = liveness.frames[0];
-          } else {
-            console.warn("Liveness model unavailable, skipping liveness check.");
-          }
-
-          const primaryFrame = liveness !== "unavailable" && liveness.frames.length > 0 ? liveness.frames[0] : frame.dataUri;
-          const frame2 = liveness !== "unavailable" && liveness.frames.length > 1 ? liveness.frames[1] : primaryFrame;
-          const frame3 = liveness !== "unavailable" && liveness.frames.length > 2 ? liveness.frames[2] : primaryFrame;
-
-          // Deterministic identity check (face embeddings) is disabled, using AI verification directly.
-          const result = await verifyFace({
-            registeredImageUrl: profile.facialScanUrl,
-            liveCaptureDataUri: primaryFrame,
-            liveCaptureFrame2: frame2,
-            liveCaptureFrame3: frame3,
-          });
-          setVerificationResult(result);
-
-          const accepted = result.isMatch && (result.confidence ?? 0) >= FACE_CONFIDENCE_THRESHOLD;
-          const confidencePercent = Math.round((result.confidence ?? 0) * 100);
-          if (accepted) {
-            await resetVerificationFailures(currentUser.uid);
-            toast({
-              title: 'Verification Successful',
-              description: `${result.reason} (confidence ${confidencePercent}%).`,
-              variant: 'default',
-            });
-          } else {
-            await registerVerificationFailure(currentUser.uid);
-            toast({
-              variant: 'destructive',
-              title: 'Verification Failed',
-              description: `${result.reason} (confidence ${confidencePercent}%).`,
-            });
-          }
-        }
-      } catch (error) {
-        console.error(`${action} error:`, error);
-        toast({
-          variant: 'destructive',
-          title: `${action.charAt(0).toUpperCase() + action.slice(1)} Error`,
-          description: `An unexpected error occurred during face ${action}.`,
-        });
-      } finally {
-        setIsProcessingFace(false);
-      }
-    }
-  };
 
   const handleUpgradeToArtist = async () => {
     if (!currentUser) return;
@@ -1174,120 +989,10 @@ export default function SettingsPage() {
                 <Label htmlFor="password">New Password</Label>
                 <Input id="password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
               </div>
-                <Button onClick={handleSecurityUpdate} disabled={savingSecurity}>
-                    {savingSecurity ? <Loader2 className="animate-spin" /> : "Update Security"}
-                </Button>
-              <Card className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-md font-medium">Facial Scan Login (2FA)</h3>
-                      <p className="text-sm text-muted-foreground mb-2">Enhance your security with AI-powered identity verification.</p>
-                    </div>
-                    <Switch checked={profile.twoFactorEnabled || false} onCheckedChange={handle2FAToggle} disabled={loadingProfile}/>
-                  </div>
-{profile.twoFactorEnabled && (
-                    <div className="mt-4 space-y-4 border-t pt-4">
-                      {profile.facialScanUrl ? (
-                        // Face already registered - show thumbnail and re-register option
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium">Registered Face</h4>
-                              <p className="text-sm text-muted-foreground">Your face is registered for 2FA verification.</p>
-                            </div>
-                            <Button variant="outline" onClick={() => setShowCameraRegister(true)} disabled={isProcessingFace}>
-                              <RotateCcw className="mr-2 h-4 w-4" />
-                              Re-register Face
-                            </Button>
-                          </div>
-                          
-                          {showCameraRegister && (
-                            <div className="space-y-4 border-t pt-4 animate-in">
-                              {hasCameraPermission === false && (
-                                <Alert variant="destructive">
-                                  <Camera className="h-4 w-4" />
-                                  <AlertTitle>{cameraError ? cameraErrorTitle(cameraError.error) : 'Camera Access Required'}</AlertTitle>
-                                  <AlertDescription className="flex flex-col gap-2">
-                                    {cameraError ? cameraErrorDescription(cameraError.error) : 'Please allow camera access in your browser to use this feature.'}
-                                    <Button onClick={() => setCameraRetryKey(k => k + 1)} variant="outline" size="sm" className="self-start">
-                                      Try Again
-                                    </Button>
-                                  </AlertDescription>
-                                </Alert>
-                              )}
-                              <div className="relative aspect-video w-full max-w-sm mx-auto bg-muted rounded-md overflow-hidden">
-                                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                                <canvas ref={canvasRef} className="hidden" />
-                              </div>
-                              
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <Button onClick={() => captureAndProcessFace('register')} disabled={!hasCameraPermission || isProcessingFace} className="w-full">
-                                  {isProcessingFace ? <Loader2 className="animate-spin" /> : <UserCheck />}
-                                  {isProcessingFace ? 'Registering...' : 'Re-register Face'}
-                                </Button>
-                                <Button variant="outline" onClick={() => setShowCameraRegister(false)} disabled={isProcessingFace}>
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Show registered face thumbnail */}
-                          <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
-                            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-muted border border-border/50 flex-shrink-0">
-                              <img 
-                                src={profile.facialScanUrl} 
-                                alt="Registered face" 
-                                className="w-full h-full object-cover" 
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium">Face registered for 2FA</p>
-                              <p className="text-sm text-muted-foreground truncate">This image will be used for facial verification during login.</p>
-                            </div>
-                          </div>
-                          
-                          {verificationResult && (
-                            <Alert variant={verificationResult.isMatch ? "default" : "destructive"} className="flex items-center gap-4">
-                              {verificationResult.isMatch ? <ShieldCheck className="h-5 w-5 text-green-500" /> : <ShieldX className="h-5 w-5 text-red-500" />}
-                              <div>
-                                <AlertTitle>{verificationResult.isMatch ? "Verification Successful" : "Verification Failed"}</AlertTitle>
-                                <AlertDescription>{verificationResult.reason} (confidence {Math.round((verificationResult.confidence ?? 0) * 100)}%).</AlertDescription>
-                              </div>
-                            </Alert>
-                          )}
-                        </div>
-                      ) : (
-                        // Face not registered yet - show camera and register button
-                        <div className="space-y-4">
-                          {hasCameraPermission === false && (
-                            <Alert variant="destructive">
-                              <Camera className="h-4 w-4" />
-                              <AlertTitle>{cameraError ? cameraErrorTitle(cameraError.error) : 'Camera Access Required'}</AlertTitle>
-                              <AlertDescription className="flex flex-col gap-2">
-                                {cameraError ? cameraErrorDescription(cameraError.error) : 'Please allow camera access in your browser to use this feature.'}
-                                <Button onClick={() => setCameraRetryKey(k => k + 1)} variant="outline" size="sm" className="self-start">
-                                  Try Again
-                                </Button>
-                              </AlertDescription>
-                            </Alert>
-                          )}
-                          <div className="relative aspect-video w-full max-w-sm mx-auto bg-muted rounded-md overflow-hidden">
-                            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                            <canvas ref={canvasRef} className="hidden" />
-                          </div>
-                          
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <Button onClick={() => captureAndProcessFace('register')} disabled={!hasCameraPermission || isProcessingFace} className="w-full">
-                              {isProcessingFace ? <Loader2 className="animate-spin" /> : <UserCheck />}
-                              {isProcessingFace ? 'Registering...' : 'Register Face'}
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </Card>
+              <Button onClick={handleSecurityUpdate} disabled={savingSecurity}>
+                {savingSecurity ? <Loader2 className="animate-spin" /> : "Update Security"}
+              </Button>
+
             </CardContent>
           </Card>
           

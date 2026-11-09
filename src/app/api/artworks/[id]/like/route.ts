@@ -3,6 +3,7 @@ import { ServerValue } from 'firebase-admin/database';
 import { getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
 // function limit, which surfaces as a 504 Gateway Timeout.
 export const maxDuration = 60;
@@ -24,6 +25,8 @@ async function withTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[artworks/like] ${label}: +${Date.now() - t0}ms`);
   try {
     let artworkId = '';
     try {
@@ -44,8 +47,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ success: false, error: 'userId is required.' }, { status: 400 });
     }
 
+    lap('body parsed');
+
     const db = getAdminDb();
+    lap('adminDb ready');
     const artworkSnap = await withTimeout('getArtwork', db.ref(`artworks/${artworkId}`).get());
+    lap('getArtwork done');
     if (!artworkSnap.exists()) {
       return NextResponse.json({ success: false, error: 'Artwork not found.' }, { status: 404 });
     }
@@ -61,6 +68,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const likeRef = db.ref(`artworks/${artworkId}/likes/${userId}`);
     const existing = await withTimeout('checkExistingLike', likeRef.get());
+    lap('checkExistingLike done');
     if (existing.exists()) {
       return NextResponse.json({ success: true, alreadyLiked: true, message: 'Artwork already liked.' });
     }
@@ -86,9 +94,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     await withTimeout('updateLike', db.ref().update(updates));
+    lap('updateLike done');
     return NextResponse.json({ success: true, liked: true, likesCount: (artwork.likesCount || 0) + 1, artistEarnedPoints: 10 });
   } catch (error: any) {
-    console.error('[artworks/like] unexpected error:', error);
+    console.error(`[artworks/like] failed after ${Date.now() - t0}ms:`, error);
     const errorMessage = error?.message?.includes('step timeout')
       ? 'Database operation timed out. Please try again.'
       : 'Internal server error.';
