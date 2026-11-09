@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 import { saveProof } from '@/utils/worldid-proof';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 function formatAuthError(err: any): string {
   const code = err.code || "";

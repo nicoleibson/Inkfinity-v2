@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { User, Shield, Lock, Loader2, Upload, WalletCards, Unlink, Crown, MapPin, Instagram, Twitter, Link as LinkIcon, BookUser, AlertCircle, CalendarDays, MessageCircle, Send, CheckCircle2, HardDrive, ExternalLink, Cloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
@@ -40,6 +41,8 @@ import {
   uploadProfileImageToGoogleDrive,
   authorizeGoogleDrive,
   getCachedDriveAccessToken,
+  clearDriveAccessToken,
+  getDriveFolderUrl,
   deleteOldUserMedia,
 } from '@/lib/google-drive';
 
