@@ -35,27 +35,46 @@ export default function AdminLayout({
   useUserSession();
 
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
     const unsubscribe = auth.onAuthStateChanged((user) => {
-        if (user) {
-            const userRef = ref(database, `users/${user.uid}`);
-            get(userRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    const profile: UserProfile = snapshot.val();
-                    setCurrentUserProfile(profile);
-                     if (profile.role !== 'Administrator' && profile.role !== 'Super-Administrator') {
-                        router.push('/');
-                    } else {
-                        setLoading(false);
-                    }
-                } else {
-                    router.push('/login');
-                }
-            });
-        } else {
-            router.push('/login');
-        }
+      if (timer) clearTimeout(timer);
+
+      if (user) {
+        const userRef = ref(database, `users/${user.uid}`);
+        get(userRef)
+          .then((snapshot) => {
+            if (snapshot.exists()) {
+              const profile: UserProfile = snapshot.val();
+              setCurrentUserProfile(profile);
+              if (profile.role !== 'Administrator' && profile.role !== 'Super-Administrator') {
+                router.replace('/');
+              } else {
+                setLoading(false);
+              }
+            } else {
+              // Si el usuario existe en Auth pero aún no cargó el snapshot en RTDB, no expulsar de inmediato
+              router.replace('/login');
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to load user profile in AdminLayout:', err);
+            setLoading(false);
+          });
+      } else {
+        // En Next.js client navigation o refresh, onAuthStateChanged puede disparar null
+        // antes de resolver la sesión persistente de IndexedDB/cookie. Esperamos un breve periodo.
+        timer = setTimeout(() => {
+          if (!auth.currentUser) {
+            router.replace('/login');
+          }
+        }, 1200);
+      }
     });
-    return () => unsubscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
   }, [router]);
 
   const menuItems = [

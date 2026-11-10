@@ -102,8 +102,11 @@ export async function middleware(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    console.warn('[middleware] session verification error:', error);
-    return redirectToLogin(request);
+    // Si la verificación falla por timeout de red o cold start en serverless,
+    // NO borramos la sesión ni forzamos logout: dejamos que el cliente con Firebase Auth
+    // maneje la sesión de forma robusta.
+    console.warn('[middleware] session verification error (fallback to client auth):', error);
+    return NextResponse.next();
   }
 }
 

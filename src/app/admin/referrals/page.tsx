@@ -34,7 +34,9 @@ export default function MyReferralsPage() {
     const router = useRouter();
 
     useEffect(() => {
+        let timer: NodeJS.Timeout | null = null;
         const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (timer) clearTimeout(timer);
             if (user) {
                 const userRef = ref(database, `users/${user.uid}`);
                 get(userRef).then((snapshot) => {
@@ -43,7 +45,7 @@ export default function MyReferralsPage() {
                         if (profile.role !== 'Administrator' && profile.role !== 'Super-Administrator') {
                             setAccessDenied(true);
                             setLoading(false);
-                            router.push('/');
+                            router.replace('/');
                         } else {
                             setCurrentUser(profile);
                             fetchReferralData(user.uid);
@@ -52,14 +54,24 @@ export default function MyReferralsPage() {
                         setAccessDenied(true);
                         setLoading(false);
                     }
+                }).catch((err) => {
+                    console.error("Failed to load user profile in referrals:", err);
+                    setLoading(false);
                 });
             } else {
-                setAccessDenied(true);
-                setLoading(false);
-                router.push('/login');
+                timer = setTimeout(() => {
+                    if (!auth.currentUser) {
+                        setAccessDenied(true);
+                        setLoading(false);
+                        router.replace('/login');
+                    }
+                }, 1200);
             }
         });
-        return () => unsubscribe();
+        return () => {
+            if (timer) clearTimeout(timer);
+            unsubscribe();
+        };
     }, [router]);
 
     const fetchReferralData = async (adminId: string) => {
