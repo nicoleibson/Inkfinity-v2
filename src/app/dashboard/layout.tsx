@@ -12,7 +12,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { BookUser, LayoutDashboard, Package, Shield, Users } from 'lucide-react';
+import { Award, BookUser, LayoutDashboard, Package, Shield, Users } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useUserSession } from '@/hooks/useUserSession';
@@ -51,6 +51,7 @@ export default function DashboardLayout({
     { href: '/dashboard/bookings', label: 'Bookings', icon: BookUser, roles: ['Client', 'Tattoo Artist', 'Studio'] },
     { href: '/dashboard/studio', label: 'Manage Artists', icon: Users, roles: ['Studio'] },
     { href: '/dashboard/products', label: 'Manage Products', icon: Package, roles: ['Supply Store'] },
+    { href: '/dashboard/referrals', label: 'My Referrals', icon: Award, roles: ['Client', 'Tattoo Artist', 'Studio', 'Supply Store'] },
   ];
 
   return (

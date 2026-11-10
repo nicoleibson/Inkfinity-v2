@@ -62,7 +62,7 @@ export default function AdminLayout({
     { href: '/admin', label: 'Platform', icon: Server, roles: ['Administrator', 'Super-Administrator'] },
     { href: '/admin/users', label: 'Users', icon: Users, roles: ['Administrator', 'Super-Administrator'] },
     { href: '/admin/moderation', label: 'Moderation', icon: Gavel, roles: ['Super-Administrator'] },
-    { href: '/admin/referrals', label: 'My Referrals', icon: Award, roles: ['Administrator'] },
+    { href: '/admin/referrals', label: 'My Referrals', icon: Award, roles: ['Administrator', 'Super-Administrator'] },
     { href: '/admin/cleanup', label: 'DB Cleanup', icon: Database, roles: ['Administrator', 'Super-Administrator'] },
   ];
 

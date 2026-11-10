@@ -22,6 +22,7 @@ import {
   Menu,
   ChevronRight,
   Sparkles,
+  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -312,6 +313,12 @@ export default function Header() {
                           <Link href="/chat" className="cursor-pointer">
                             <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground" />
                             <span>Messages</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href="/dashboard/referrals" className="cursor-pointer">
+                            <Award className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span>My Referrals</span>
                           </Link>
                         </DropdownMenuItem>
                       </>

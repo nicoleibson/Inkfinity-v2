@@ -158,12 +158,19 @@ export default function UserManagementTable() {
     try {
         const newCode = `${adminUser.name.split(' ')[0].toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         
+        // Admins get higher percentages; other roles get platform defaults
+        const isAdmin = adminUser.role === 'Administrator' || adminUser.role === 'Super-Administrator';
+        const defaultDiscount = isAdmin ? 30 : 10;
+        const defaultCommission = isAdmin ? 20 : 10;
+
         const newReferral: Referral = {
             code: newCode,
             referrerId: adminUser.uid,
             adminName: adminUser.name,
-            discountPercentage: 30,
-            commissionPercentage: 20,
+            ownerName: adminUser.name,
+            ownerRole: adminUser.role || 'Client',
+            discountPercentage: defaultDiscount,
+            commissionPercentage: defaultCommission,
             createdAt: new Date().toISOString(),
             uses: 0,
         };
@@ -250,8 +257,8 @@ export default function UserManagementTable() {
                   const requestStatusInfo = requestStatusConfig[user.artistRequestStatus || 'none'];
                   const isProcessingRequest = updatingUserId === user.uid;
                   const isGeneratingCode = generatingCodeFor === user.uid;
-                  const canGenerateCode = currentUserProfile.role === 'Super-Administrator' && user.role === 'Administrator';
-                  const canViewCode = (currentUserProfile.role === 'Super-Administrator' || currentUserProfile.role === 'Administrator') && user.role === 'Administrator';
+                  const canGenerateCode = currentUserProfile.role === 'Super-Administrator' && !user.referral;
+                  const canViewCode = (currentUserProfile.role === 'Super-Administrator' || currentUserProfile.role === 'Administrator');
                   const canEditCode = currentUserProfile.role === 'Super-Administrator' && user.referral;
 
                   return (

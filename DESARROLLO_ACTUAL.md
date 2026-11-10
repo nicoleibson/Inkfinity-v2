@@ -48,14 +48,21 @@ Toda la persistencia ocurre en Firebase Realtime Database. La seguridad está co
 *   **`src/lib/`**: Archivos de configuración de dependencias (instancias de Firebase, helpers `cn` de Tailwind, configuraciones Web3, módulo de Google Drive `google-drive.ts` para almacenamiento de imágenes, módulo IPFS `ipfs.ts` para obras NFT).
 *   **`src/ai/`**: Lógica de inicialización y flujos de Genkit.
 
-## 5. Módulo Reciente: Limpieza y Mantenimiento de BD (Admin)
+## 5. Módulo Reciente: Sistema de Referidos y Comisiones On-Chain
+- **Asignación Multi-Rol**: Los Super-Administradores pueden generar y asignar códigos de referidos a cualquier rol (`Client`, `Tattoo Artist`, `Studio`, `Supply Store`, `Administrator`) desde `/admin/users`.
+- **Porcentajes por Defecto**: 30% descuento / 20% comisión para Administradores; 10% descuento / 10% comisión para Artistas, Clientes y Tiendas.
+- **Acumulación Semanal**: `/api/verify-payment` acumula comisiones en Wei en `users/{referrerId}/referralEarnings/{weekKey}` (BigInt seguro) tras cada activación exitosa con descuento.
+- **Pagos On-Chain Automatizados**: `/api/referral-payouts/on-chain` permite liquidar comisiones enviando WLD ERC-20 directamente a la dirección de billetera del referrer en World Chain con prevención de doble gasto y enlaces a WorldScan.
+- **Dashboards de Métricas**: Tanto `/admin/referrals` como `/dashboard/referrals` ofrecen tarjetas métricas (Total Referidos, Comisiones WLD, Pendiente, Pagado), gráficos semanales con Recharts (`referral-earnings-chart.tsx`) y tablas de historial con estados detallados (`referral-payouts-table.tsx`).
+
+## 6. Módulo Reciente: Limpieza y Mantenimiento de BD (Admin)
 
 Recientemente se integraron capacidades administrativas para sanear la base de datos de manera automatizada:
 1.  **Herramienta Web:** Ubicada en `/admin/cleanup`. Permite al Administrador sincronizar el nodo de `/usernames` con usuarios válidos y eliminar notificaciones/likes de entidades que ya no existen (registros huérfanos). Las imágenes se gestionan externamente en Google Drive de cada usuario.
 2.  **Herramientas Offline de Terminal:** 
     *   Se crearon `cleanup-script.mjs` y `run-cleanup.sh` en el entorno raíz. Permiten hacer mantenimiento invocando directamente la REST API/SDK de Firebase desde una shell, inyectando variables desde `.env.local` y requiriendo credenciales de administrador (Email/Password) para no violar las reglas de Firebase.
 
-## 6. Instrucciones Directivas para IAs Colaboradoras
+## 7. Instrucciones Directivas para IAs Colaboradoras
 
 Si vas a desarrollar o modificar características en este proyecto, DEBES adherirte a las siguientes normativas:
 
