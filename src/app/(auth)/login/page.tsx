@@ -273,6 +273,7 @@ function LoginForm() {
       if (user) await completeLogin(user);
     } catch (err: any) {
       setError(formatAuthError(err));
+    } finally {
       setLoading(false);
     }
   };
