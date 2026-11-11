@@ -77,6 +77,7 @@ export async function middleware(request: NextRequest) {
 
   const sessionCookie = request.cookies.get('__session')?.value;
   if (!sessionCookie) {
+    console.warn('[middleware] no __session cookie, sending to login:', pathname);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -94,6 +95,7 @@ export async function middleware(request: NextRequest) {
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
+        console.warn('[middleware] session rejected, sending to login:', pathname, response.status);
         return redirectToLogin(request);
       }
       console.warn('[middleware] session verification unavailable:', response.status);

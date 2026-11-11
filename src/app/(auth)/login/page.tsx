@@ -1,7 +1,7 @@
 // src/app/(auth)/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,29 +61,71 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
 
-  // Helper to create session cookie after successful auth
-  const createSessionCookie = async (user: any) => {
-    try {
-      const idToken = await user.getIdToken(true);
-      const response = await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-        signal: AbortSignal.timeout(30000),
-        credentials: 'include', // ensure HttpOnly cookie is sent
-      });
-      if (!response.ok) {
-        console.error('Failed to create session cookie:', response.status);
+  // Creates the httpOnly __session cookie the middleware uses to gate /admin.
+  // Returns false when the server could not mint it, so callers can retry
+  // instead of navigating straight into another "please log in" redirect.
+  const createSessionCookie = useCallback(async (user: any): Promise<boolean> => {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const idToken = await user.getIdToken(attempt > 1);
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+          signal: AbortSignal.timeout(30000),
+          credentials: 'include', // ensure HttpOnly cookie is sent
+        });
+        if (response.ok) return true;
+
+        const body = await response.json().catch(() => null);
+        console.error('Failed to create session cookie:', response.status, body?.error);
+        // 400/401 mean the token itself is unusable; a retry will not help.
+        if (response.status === 400 || response.status === 401) return false;
+      } catch (err) {
+        console.error('Failed to create session cookie:', err);
       }
-    } catch (err) {
-      console.error('Failed to create session cookie:', err);
     }
-  };
+    return false;
+  }, []);
+
+  // Recovery path: the middleware sends members to /login?redirect=… when the
+  // httpOnly cookie is missing. If Firebase Auth already has a session (the
+  // cookie was lost, expired, or never created), recreate it and continue
+  // instead of asking for credentials the member already provided.
+  const recoveryAttempted = useRef(false);
+  useEffect(() => {
+    if (!redirectPath || redirectPath === '/' || recoveryAttempted.current) return;
+    recoveryAttempted.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await auth.authStateReady();
+        const user = auth.currentUser;
+        if (!user || cancelled) return;
+        const hasSession = await createSessionCookie(user);
+        if (hasSession && !cancelled) router.replace(redirectPath);
+      } catch (err) {
+        console.error('Session recovery failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createSessionCookie, redirectPath, router]);
 
   const completeLogin = async (user: any) => {
     // Esperar a que la cookie __session se establezca en el navegador antes de navegar
     // para que el middleware no rechace las rutas privadas.
-    await createSessionCookie(user);
+    const hasSession = await createSessionCookie(user);
+    if (!hasSession) {
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo crear la sesión',
+        description: 'La sesión del servidor no se pudo crear. Algunas secciones privadas (como /admin) pueden pedirte iniciar sesión de nuevo.',
+      });
+    }
 
     try {
       // Check user profile for status and 2FA

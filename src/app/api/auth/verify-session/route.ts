@@ -26,13 +26,24 @@ async function withTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
 
 /**
  * A rejected token is the only thing that means "this session is invalid".
- * Firebase Admin auth errors carry an `auth/` code; anything else (Admin SDK not
- * configured, credential fetch failing, network) is an outage and must not be
- * reported as 401, because the middleware treats 401 as "log this member out".
+ * Firebase Admin auth errors carry a stable `auth/` code, but `auth/internal-error`
+ * also starts with `auth/` and is produced by network/certificate failures, so
+ * only the explicit rejection codes are treated as a logout. Everything else is
+ * an outage and must never cost the member their session.
  */
+const REJECTION_CODES = new Set([
+  'auth/session-cookie-expired',
+  'auth/session-cookie-revoked',
+  'auth/invalid-session-cookie',
+  'auth/invalid-id-token',
+  'auth/id-token-expired',
+  'auth/id-token-revoked',
+  'auth/argument-error',
+]);
+
 function isTokenRejection(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && code.startsWith('auth/');
+  return typeof code === 'string' && REJECTION_CODES.has(code);
 }
 
 export async function GET(request: NextRequest): Promise<Response> {

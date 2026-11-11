@@ -31,6 +31,7 @@ export default function AdminLayout({
   const router = useRouter();
   const [currentUserProfile, setCurrentUserProfile] = useState<Partial<UserProfile> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useUserSession();
 
@@ -52,12 +53,16 @@ export default function AdminLayout({
                 setLoading(false);
               }
             } else {
-              // Si el usuario existe en Auth pero aún no cargó el snapshot en RTDB, no expulsar de inmediato
-              router.replace('/login');
+              // Autenticado pero sin perfil en RTDB: es un problema de datos, no
+              // de login. Redirigir a /login aquí producía un bucle de
+              // "inicia sesión" imposible de romper.
+              setLoadError('No se encontró el perfil de esta cuenta en la base de datos.');
+              setLoading(false);
             }
           })
           .catch((err) => {
             console.error('Failed to load user profile in AdminLayout:', err);
+            setLoadError('No se pudo leer el perfil del usuario. Revisá tu conexión e intentá de nuevo.');
             setLoading(false);
           });
       } else {
@@ -91,6 +96,23 @@ export default function AdminLayout({
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
         </div>
     )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen gap-3 p-6 text-center">
+        <Shield className="h-12 w-12 text-destructive" />
+        <h1 className="text-xl font-bold">No se pudo abrir el panel</h1>
+        <p className="max-w-md text-sm text-muted-foreground">{loadError}</p>
+        <button
+          type="button"
+          className="text-sm text-primary underline"
+          onClick={() => router.replace('/')}
+        >
+          Volver al inicio
+        </button>
+      </div>
+    );
   }
 
   return (

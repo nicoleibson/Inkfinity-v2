@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 // Firebase Admin cold start + Google Auth/RTDB round-trips can exceed Vercel's
@@ -46,7 +46,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
     lap('admin ready');
 
     // Verify the ID token
@@ -56,14 +55,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       return NextResponse.json({ error: 'Invalid ID token' }, { status: 401 });
     }
 
-    const uid = decodedClaims.uid;
-
-    // Get user profile
-    const userRef = adminDb.ref(`users/${uid}`);
-    const snapshot = await withTimeout('rtdb get', userRef.get());
-    lap('rtdb get done');
-    const profile = snapshot.exists() ? snapshot.val() : null;
-
     // Create session cookie (expires in 14 days)
     const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days in ms
     const sessionCookie = await withTimeout(
@@ -72,13 +63,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
     lap('createSessionCookie done');
 
+    // The cookie has to be usable on whatever scheme the client is actually on.
+    // Deriving it from NODE_ENV breaks `next start` over http (the browser drops
+    // a Secure cookie), which used to look like an endless /login redirect.
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+    const isHttps = request.nextUrl.protocol === 'https:' || forwardedProto === 'https';
+
     // Set cookie
     const response = NextResponse.json({ success: true });
 
     response.cookies.set('__session', sessionCookie, {
       maxAge: 60 * 60 * 24 * 14, // 14 days in seconds
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
     });
