@@ -26,7 +26,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Admin-to-User Chat:** Real-time messaging restricted to communication between administrators and users for platform support. Users contact each other via their social media links (WhatsApp, Instagram, Telegram) displayed on their profiles.
 *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings (including the active blockchain network), and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
 *   **Referral & Commission Ecosystem:** Multi-role referral system allowing Super-Administrators to assign referral codes to any user role (Artists, Studios, Supply Stores, Clients, and Administrators). Includes real-time discount calculation, automatic weekly commission tracking, an interactive metrics dashboard with Recharts, and automated on-chain payouts in WLD on World Chain.
-*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. **World ID** is used for 2FA/sybil resistance, replacing legacy verification mechanisms. See [`docs/WORLD_ID_INTEGRATION.md`](docs/WORLD_ID_INTEGRATION.md).
+*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. **World ID** is used for 2FA/sybil resistance, replacing legacy verification mechanisms. See [`docs/WORLD_ID.md`](docs/WORLD_ID.md).
 
 ## Tech Stack
 
@@ -35,7 +35,6 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Hosting:** [Vercel](https://vercel.com) — canonical domain `https://inkfinity-ten.vercel.app`
 *   **Backend & Database:** [Firebase](https://firebase.google.com/) (Authentication, Realtime Database). *Firebase Storage was fully removed as image store; images live in each user's Google Drive account (via OAuth, module `src/lib/google-drive.ts`) and NFT artworks on IPFS (`src/lib/ipfs.ts`). Firebase is **not** the web host.*
 *   **Generative AI:** [Google AI & Genkit](https://firebase.google.com/docs/genkit)
-*   **Client-side ML:** [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision) (face detection + face landmarker for liveness), served from `public/models/`. (The former face-api.js embedding layer was removed.)
 *   **Web3:** [Ethers.js](https://ethers.io/) for wallet interactions and [Worldcoin MiniKit](https://docs.world.org/minikit) (native SIWE + ERC-4337 userOperations inside the World App). WalletConnect/Reown and injected-extension wallets were **removed**.
 *   **Blockchain:** [WorldChain](https://world.org) mainnet (chain ID 480, native token **WLD**).
 
@@ -46,9 +45,10 @@ To get the project up and running locally, please refer to the detailed instruct
 1.  **`docs/SETUP.md`**: Firebase CLI link, the full `.env.local` reference (Firebase, WorldChain RPCs, World App IDs), and Git setup.
 2.  **`docs/DEPLOYMENT.md`**: Deploying to **Vercel** (environment variables, authorized domains, World App domain allowlist, WorldChain settings, CSP) so World ID verification and payments work on real devices.
 3.  **`docs/WORLD_ID.md`**: Proof-of-humanity reference: Developer Portal setup (`app_id`, `rp_id`, signing key, actions), IDKit flow, environment handling, data model and troubleshooting.
-4.  **`docs/ADVANCED_INTEGRATIONS.md`**: Server-side logic and AI flows, plus the **WorldChain + MiniKit** architecture and the current limitations of the userOp payment verification.
-5.  **`docs/SECURITY.md`**: An in-depth overview of the platform's security architecture.
-6.  **`docs/TROUBLESHOOTING.md`**: Common issues — camera/HTTPS, Firebase JSONP CSP, geolocation, World App SIWE, `no such account`, and userOperation verification.
+4.  **`docs/MINIAPP_CHANGELOG.md`**: Copy-paste text for the World Developer Portal submission — app description, changelog, World ID and payment story, Mini App permissions and the reviewer walkthrough.
+5.  **`docs/ADVANCED_INTEGRATIONS.md`**: Server-side logic and AI flows, plus the **WorldChain + MiniKit** architecture and the current limitations of the userOp payment verification.
+6.  **`docs/SECURITY.md`**: An in-depth overview of the platform's security architecture.
+7.  **`docs/TROUBLESHOOTING.md`**: Common issues — camera/HTTPS, Firebase JSONP CSP, geolocation, World App SIWE, `no such account`, and userOperation verification.
 
 ---
 
