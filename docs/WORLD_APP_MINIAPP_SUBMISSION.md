@@ -2,13 +2,15 @@
 
 This guide details the exact configurations, assets, and checks required to submit **Inkfinity** for review and listing on the **World App** store via the World Developer Portal (`developer.world.org`).
 
+> The copy-paste submission text (description, changelog, permissions rationale and reviewer walkthrough) lives in [`docs/MINIAPP_CHANGELOG.md`](MINIAPP_CHANGELOG.md). Keep both files in sync.
+
 ---
 
 ## 1. App Information & Branding Assets
 
 ### Metadata
 - **App Name:** Inkfinity
-- **Subtitle / Tagline:** The Web3 Tattoo Marketplace for Verified Humans
+- **Subtitle / Tagline:** Tattoo artists, studios and clients in one place
 - **Category:** Social / Marketplace / Creative
 - **Developer / Team Name:** Inkfinity Core Team
 - **Support Email:** `support@inkfinity.app` (must match privacy policy and handle user inquiries)
@@ -29,7 +31,7 @@ This guide details the exact configurations, assets, and checks required to subm
     1. Home / Discover feed with trending tattoo styles & artists
     2. Artist portfolio & booking consultation screen
     3. WLD payment confirmation via MiniKit
-    4. Verified human profile with 2FA status
+    4. Profile with the World ID verified badge
 
 ---
 
@@ -39,16 +41,19 @@ This guide details the exact configurations, assets, and checks required to subm
 - **Production URL:** `https://inkfinity-ten.vercel.app`
 - **Staging / Simulator URL:** For local testing using World App Simulator (`staging`).
 
-### B. World ID Action
-- **Action Identifier:** `inkfinity-account`
-- **Verification Level:** Device or Orb (Orb recommended for maximum sybil resistance on artist registration and 2FA).
+### B. World ID Actions
+- **`inkfinity-auth`** — signup and login (unauthenticated RP context, `POST /api/auth/worldid/rp-context`).
+- **`inkfinity-account`** — link World ID to an existing account from Settings (authenticated, `POST /api/worldid/rp-context`).
+- **Verification Level:** Orb proof (`orbLegacy()`), which yields the uniqueness nullifier.
+- Both actions must exist in the portal for the same app; see [`docs/WORLD_ID.md`](WORLD_ID.md).
 
 ### C. Contract & Token Whitelisting
 Under the MiniKit / Payments section in the portal:
 - **Blockchain:** World Chain (Mainnet - Chain ID: `480`)
 - **Token Contract (WLD):**
   - `0x2cFc85d8E48F8EAB294be644d9E25C3030863003` (World Chain Mainnet WLD ERC-20)
-- **Recipient Wallet Address:** The Inkfinity treasury / platform multi-sig or contract configured in `src/lib/constants.ts`.
+- **Recipient Wallet Address:** The Inkfinity treasury EOA, configured with `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` (server fallback: `PLATFORM_WALLET_ADDRESS`). It is a plain account that receives WLD, not a contract.
+- **Only this token:** the app transfers WLD and calls only the WLD contract. No other token or contract is used.
 
 ---
 
@@ -56,7 +61,7 @@ Under the MiniKit / Payments section in the portal:
 
 - [x] **No Popups / External Redirections:** Navigation stays strictly within the World App WebView.
 - [x] **Public Entry Point (`/`):** The root route `/` loads instantly without forcing login.
-- [x] **Safe Wallet Fallback:** When inside World App, `MiniKit.isInstalled()` is detected automatically; transactions use native World App dialogs.
+- [x] **Wallet Handling:** `isInWorldApp()` gates every wallet action; inside World App transactions use the native dialog, outside it the app asks the user to open World App instead of falling back to a browser wallet.
 - [x] **Anti-Replay Verification:** World ID proofs are hashed and validated atomically in the backend.
 - [x] **Data Privacy & GDPR / World Compliance:** Dedicated `/privacy` page published and visible in navigation.
 - [x] **No Token Pre-Sales:** The platform only facilitates booking deposits and artist subscriptions in WLD; no token sales or prohibited investments.

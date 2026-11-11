@@ -32,8 +32,13 @@ firestore-debug.log
 # local env files
 .env
 .env*.local
-.env.example
-.env*.example
+# .env.example is a tracked template: keep it shareable.
+
+# editor swap files
+*.swp
+*.swo
+*.kate-swp
+*~
 # vercel
 .vercel
 

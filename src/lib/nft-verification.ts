@@ -1,6 +1,7 @@
 // src/lib/nft-verification.ts
 import { JsonRpcProvider, Contract, isAddress, getAddress } from 'ethers';
 import { DEFAULT_NETWORK, type NetworkName } from './blockchain';
+import { getWorldChainRpcUrl } from './worldchain-rpc';
 
 /**
  * Real, on-chain NFT ownership verification.
@@ -19,7 +20,7 @@ import { DEFAULT_NETWORK, type NetworkName } from './blockchain';
 const RPC_URLS: Record<NetworkName, string | undefined> = {
   amoy: process.env.RPC_AMOY_URL || 'https://rpc-amoy.polygon.technology/',
   polygon: process.env.RPC_POLYGON_URL || 'https://polygon-rpc.com/',
-  worldchain: process.env.RPC_WORLDCHAIN_URL || 'https://worldchain-mainnet.g.alchemy.com/public',
+  worldchain: getWorldChainRpcUrl(),
   worldchainSepolia: process.env.RPC_WORLDCHAIN_SEPOLIA_URL || 'https://worldchain-sepolia.g.alchemy.com/public',
 };
 

@@ -18,13 +18,13 @@ Ver también `.env.example` y `docs/WORLD_ID.md`.
 | `WORLD_ID_ENVIRONMENT` | server | Config | `production` (default) o `staging` (simulador, solo pruebas). |
 | `PLATFORM_WALLET_PRIVATE_KEY` | server | Wallet de tesorería | **Secreta.** Firma los payouts de referidos on-chain (WLD en World Chain). Sin ella el endpoint `/api/referral-payouts/on-chain` responde 503. |
 | `PLATFORM_WALLET_ADDRESS` | server | Wallet de tesorería | Fallback server-side de la dirección pública. |
-| `RPC_WORLDCHAIN_URL` | server | Alchemy/Infura | RPC mainnet con API key. Usado por verificación de pagos userOp y NFT. |
+| `RPC_WORLDCHAIN_URL` | server | Alchemy/Infura | **Nombre canónico.** RPC mainnet con API key, usado por verificación de pagos userOp, NFT y payouts on-chain (`src/lib/worldchain-rpc.ts`). |
 | `RPC_WORLDCHAIN_SEPOLIA_URL` | server | Alchemy/Infura | Solo testnet (opcional). |
 | `RPC_WORLDCHAIN_BUNDLER_URL` | server | Alchemy Bundler | Verifica `to`/`value` exactos de userOps (opcional, recomendado). |
 | `RPC_WORLDCHAIN_SEPOLIA_BUNDLER_URL` | server | Alchemy Bundler | Solo testnet (opcional). |
 | `RPC_POLYGON_URL` | server | Polygon RPC | Fallback/legacy. |
 | `RPC_AMOY_URL` | server | Polygon Amoy RPC | Fallback/legacy. |
-| `WORLDCHAIN_RPC_URL` | server | Alchemy/Infura | RPC usado específicamente por los payouts on-chain de referidos. |
+| `WORLDCHAIN_RPC_URL` | server | Alchemy/Infura | Alias legacy de `RPC_WORLDCHAIN_URL`; se sigue respetando. No hace falta si ya está la canónica. |
 | `PRICE_API_BASE_URL` | server | CoinGecko o proxy | Endpoint compatible con `simple/price`. |
 | `ALLOW_MOCK_PRICES` | server | Config | `true` **solo en local**. Nunca en producción. |
 
@@ -42,7 +42,7 @@ Ver también `.env.example` y `docs/WORLD_ID.md`.
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Opcional (Analytics). |
 | `NEXT_PUBLIC_WORLD_APP_ID` | `app_...` del Developer Portal. Lo usan IDKit y `MiniKit.install()`. |
 | `NEXT_PUBLIC_PLATFORM_WALLET_ADDRESS` | Dirección pública de la wallet de tesorería en World Chain. |
-| `NEXT_PUBLIC_WORLDCHAIN_RPC_URL` | RPC público opcional para el cliente. |
+| `NEXT_PUBLIC_WORLDCHAIN_RPC_URL` | Alias público, último fallback antes del RPC público de Alchemy. Solo si el cliente necesita leer la cadena. |
 | `NEXT_PUBLIC_SITE_URL` | URL canónica del sitio (metadata/links). |
 
 ## Developer Portal de World ID

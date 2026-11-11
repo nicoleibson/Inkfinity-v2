@@ -8,9 +8,9 @@ This project was built to showcase the integration of modern web technologies, i
 
 ## Estado Actual y Promoción de Lanzamiento
 
-**¡Atención!** La plataforma Inkfinity se encuentra actualmente en fase de desarrollo activo.
+Inkfinity está en línea en **https://inkfinity-ten.vercel.app** y está preparada para ejecutarse dentro de **World App** como Mini App (MiniKit + World ID).
 
-Como agradecimiento a nuestros primeros seguidores y para celebrar nuestro futuro lanzamiento, nos complace ofrecer una promoción especial: **todas las cuentas que se encuentren con su membresía o pago de registro al día en el momento del lanzamiento oficial recibirán una membresía extendida de 1 año sin costo adicional.**
+Como agradecimiento a nuestros primeros seguidores, ofrecemos una promoción especial: **todas las cuentas que se encuentren con su membresía o pago de registro al día recibirán una membresía extendida de 1 año sin costo adicional.**
 
 Esta promoción es válida para todas las activaciones y renovaciones realizadas hasta **diciembre de 2027**.
 

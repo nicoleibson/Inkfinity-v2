@@ -11,6 +11,7 @@ import {
 } from '@/lib/server/userop-verification';
 import { addressSet } from '@/lib/server/address';
 import { claimPaymentOnce, sanitizeClaimKey } from '@/lib/server/payment-claim';
+import { getWorldChainRpcUrl } from '@/lib/worldchain-rpc';
 
 export const runtime = 'nodejs';
 // Firebase Admin / Cloud Storage round-trips can exceed Vercel's default 10s
@@ -46,14 +47,13 @@ function resolveBundlerUrl(network: string): string | undefined {
 }
 
 function resolveRpc(network: string): string {
+  if (network === 'worldchain') return getWorldChainRpcUrl();
   const envKey =
     network === 'amoy'
       ? 'RPC_AMOY_URL'
-      : network === 'worldchain'
-        ? 'RPC_WORLDCHAIN_URL'
-        : network === 'worldchainSepolia'
-          ? 'RPC_WORLDCHAIN_SEPOLIA_URL'
-          : 'RPC_POLYGON_URL';
+      : network === 'worldchainSepolia'
+        ? 'RPC_WORLDCHAIN_SEPOLIA_URL'
+        : 'RPC_POLYGON_URL';
   return (process.env[envKey] || '').trim() || RPC_FALLBACK[network] || '';
 }
 

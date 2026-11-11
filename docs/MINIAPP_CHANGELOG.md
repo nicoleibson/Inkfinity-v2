@@ -15,7 +15,7 @@ language, accurate scope, no "beta" framing, clear World ID and payment story.
 | **Production URL** | `https://inkfinity-ten.vercel.app` |
 | **Version** | `1.0.0` — initial submission |
 | **Release date** | 2026-11-11 |
-| **Support contact** | `<!-- TODO: support email -->` |
+| **Support contact** | `support@inkfinity.app` |
 | **Languages** | English, Spanish |
 
 ### Short description (≤ 25 words)
@@ -152,9 +152,9 @@ Payments move real WLD on World Chain. Use a small amount when testing.
 
 ## Pre-submission checklist
 
-- [ ] Replace the support email placeholder with a real, monitored address.
-- [ ] Make sure the public site and submission copy do not describe the app as a
-      demo, beta or work in progress — the review requires a final version.
+- [x] Support email set to `support@inkfinity.app` (same address published in the
+      privacy policy).
+- [x] Public copy no longer describes the app as a demo, beta or work in progress.
 - [ ] Confirm both actions (`inkfinity-auth`, `inkfinity-account`) exist in the
       Developer Portal for the same app.
 - [ ] Confirm the production domain is registered and the Mini App permissions

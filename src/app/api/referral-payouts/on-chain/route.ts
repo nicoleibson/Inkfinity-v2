@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { JsonRpcProvider, Wallet, Contract, formatEther } from 'ethers';
+import { getWorldChainRpcUrl } from '@/lib/worldchain-rpc';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -20,11 +21,7 @@ const ERC20_ABI = [
 ];
 
 function getRpcUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_WORLDCHAIN_RPC_URL ||
-    process.env.WORLDCHAIN_RPC_URL ||
-    'https://worldchain-mainnet.g.alchemy.com/public'
-  );
+  return getWorldChainRpcUrl();
 }
 
 export async function POST(request: NextRequest) {
