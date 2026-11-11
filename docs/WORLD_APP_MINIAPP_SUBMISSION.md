@@ -41,11 +41,10 @@ This guide details the exact configurations, assets, and checks required to subm
 - **Production URL:** `https://inkfinity-ten.vercel.app`
 - **Staging / Simulator URL:** For local testing using World App Simulator (`staging`).
 
-### B. World ID Actions
-- **`inkfinity-auth`** — signup and login (unauthenticated RP context, `POST /api/auth/worldid/rp-context`).
-- **`inkfinity-account`** — link World ID to an existing account from Settings (authenticated, `POST /api/worldid/rp-context`).
+### B. World ID Action
+- **`inkfinity-account`** — the single action requested by the app: signup and login (unauthenticated RP context, `POST /api/auth/worldid/rp-context`), and linking World ID from Settings (authenticated, `POST /api/worldid/rp-context`).
 - **Verification Level:** Orb proof (`orbLegacy()`), which yields the uniqueness nullifier.
-- Both actions must exist in the portal for the same app; see [`docs/WORLD_ID.md`](WORLD_ID.md).
+- The value is defined once in `src/lib/worldid-action.ts`. `inkfinity-auth` may still be listed in the portal, but the app does not request it. See [`docs/WORLD_ID.md`](WORLD_ID.md).
 
 ### C. Contract & Token Whitelisting
 Under the MiniKit / Payments section in the portal:

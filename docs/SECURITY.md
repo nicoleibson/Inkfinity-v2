@@ -35,7 +35,7 @@ This document provides a comprehensive overview of the security architecture and
 - **Fail closed:** Verifier timeouts (20 s), 404/429/5xx and network errors return `503 WORLDID_UNAVAILABLE`. They are never reported as a rejection or an approval.
 - **Environment authority:** `WORLD_ID_ENVIRONMENT` (`production` default) is enforced server-side. A `staging`/simulator proof is rejected on a production deployment and vice versa.
 - **Server-only secrets:** `RP_SIGNING_KEY` never reaches the browser. `WORLD_ID_RP_ID` (or legacy `WORLD_RP_ID`) and `NEXT_PUBLIC_WORLD_APP_ID` complete the configuration.
-- **Actions as namespaces:** `inkfinity-auth` (login/signup) and `inkfinity-account` (linking from settings) are distinct actions, so a nullifier from one cannot satisfy the other.
+- **Single action:** login, signup and Settings linking all request the same World ID action (`inkfinity-account`, defined once in `src/lib/worldid-action.ts`). A nullifier is scoped to `(app, action)`, so splitting the flows across two actions made an account linked in one flow invisible to the other.
 - **Implementation reference:** see `docs/WORLD_ID.md` for the Developer Portal setup, endpoints, data model and troubleshooting.
 
 ### 2.2. Multi-Session Detection

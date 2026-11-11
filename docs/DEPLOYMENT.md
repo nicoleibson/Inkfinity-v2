@@ -1,6 +1,6 @@
 # Inkfinity Deployment Guide
 
-Guía práctica para desplegar la plataforma en **Vercel** (hosting web) con **Firebase** como backend de datos/auth, y dejar funcionando la verificación facial 2FA (cámara + liveness + email link) y los pagos en WorldChain.
+Guía práctica para desplegar la plataforma en **Vercel** (hosting web) con **Firebase** como backend de datos/auth, y dejar funcionando la verificación de humanidad con **World ID** y los pagos en WorldChain.
 
 > **Arquitectura de despliegue actual:**
 > - **Vercel** → aplicación Next.js (`https://inkfinity-ten.vercel.app`). Es el único hosting válido.

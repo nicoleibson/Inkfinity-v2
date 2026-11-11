@@ -15,15 +15,22 @@ referencia histórica en [`docs/archive/FACIAL_VERIFICATION.md`](archive/FACIAL_
 - **Verificación server-side**: el cliente no decide nada; solo reenvía el
   resultado de IDKit, que el backend valida contra el verificador de World.
 
-## Acciones configuradas
+## Acción configurada
 
 | Acción | Uso | Endpoint que firma el RP context |
 | --- | --- | --- |
-| `inkfinity-auth` | Login y signup (usuario no autenticado) | `POST /api/auth/worldid/rp-context` (público) |
-| `inkfinity-account` | Vincular World ID a una cuenta ya autenticada desde `/settings` | `POST /api/worldid/rp-context` (requiere sesión) |
+| `inkfinity-account` | Única acción de la app: login, signup y vinculación desde `/settings` | `POST /api/auth/worldid/rp-context` (público) y `POST /api/worldid/rp-context` (con sesión) |
 
-Ambas acciones deben existir en el Developer Portal para la misma app. Si una
-acción no está registrada, IDKit falla antes de generar la prueba.
+El valor vive en [`src/lib/worldid-action.ts`](../src/lib/worldid-action.ts) y lo
+consumen cliente y servidor, para que ningún componente escriba el literal por su
+cuenta.
+
+> **Por qué una sola acción.** El nullifier está *scoped* a `(app, action)`: la
+> misma persona produce nullifiers distintos según la acción. Mientras el login
+> pedía `inkfinity-auth` y `/settings` vinculaba con `inkfinity-account`, un World
+> ID vinculado desde ajustes generaba un nullifier que el login nunca encontraba y
+> el endpoint respondía `404 No account linked`. `inkfinity-auth` puede seguir
+> registrada en el portal: la app ya no la solicita.
 
 ## Flujo
 
@@ -41,13 +48,14 @@ acción no está registrada, IDKit falla antes de generar la prueba.
 
 ### Login / signup
 
-- `signup-form.tsx` y `login/page.tsx` usan `action: 'inkfinity-auth'`.
+- `signup-form.tsx` y `login/page.tsx` usan `WORLD_ID_ACTION` (`inkfinity-account`).
 - El alta de cuenta se completa en `POST /api/auth/worldid/signup`, que marca
   `worldIdVerified: true` y registra el nullifier en el índice server-only.
 
 ### Vincular desde ajustes
 
-- `src/app/settings/world-id-verification.tsx` usa `action: 'inkfinity-account'`.
+- `src/app/settings/world-id-verification.tsx` usa la misma `WORLD_ID_ACTION`, de
+  modo que el nullifier coincide con el que busca el login.
 - `POST /api/worldid/verify` toma el `uid` **exclusivamente** del token de sesión,
   nunca del body.
 
@@ -111,14 +119,15 @@ Vercel o el cron recibe 401.
   como rechazo ni como aprobación.
 - **Entorno**: una prueba de `staging` (simulador) se rechaza si el servidor está
   en `production`.
-- **Acciones como namespace**: un nullifier de `inkfinity-auth` no sirve para
-  `inkfinity-account`.
+- **Una sola acción**: login, signup y vinculación comparten `inkfinity-account`.
+  Introducir una acción nueva para un flujo dejaría invisibles los nullifiers ya
+  vinculados y obligaría a esas cuentas a volver a vincularse.
 
 ## Configuración en el Developer Portal
 
 1. Crear la app (o completar la migración a World ID 4.0 con **Enable World ID 4.0**).
 2. Copiar `app_id`, `rp_id` y `signing_key`.
-3. Crear las acciones `inkfinity-auth` e `inkfinity-account`.
+3. Crear la acción `inkfinity-account` (la única que la app solicita).
 4. Registrar el dominio de producción (`inkfinity-ten.vercel.app`) y el dominio de
    desarrollo si aplica.
 5. Para Mini Apps: el mismo `app_id` se usa como App ID de la Mini App.

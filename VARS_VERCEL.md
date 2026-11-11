@@ -51,7 +51,7 @@ Ver también `.env.example` y `docs/WORLD_ID.md`.
 
 1. App con **World ID 4.0** habilitado (botón *Enable World ID 4.0* si migraste una app vieja).
 2. Copiar a Vercel: `app_id` → `NEXT_PUBLIC_WORLD_APP_ID`; `rp_id` → `WORLD_ID_RP_ID`; `signing_key` → `RP_SIGNING_KEY`.
-3. Crear las acciones **`inkfinity-auth`** (login/signup) e **`inkfinity-account`** (vincular desde ajustes).
+3. Crear la acción **`inkfinity-account`** (única que usa la app: login, signup y vinculación desde ajustes).
 4. Registrar el dominio de producción (`inkfinity-ten.vercel.app`) en la app/Mini App.
 5. Para pagos dentro de World App se usa el mismo `app_id` de Mini App.
 

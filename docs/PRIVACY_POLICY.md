@@ -55,7 +55,7 @@ Inkfinity is built around **privacy-preserving decentralized principles**. Whene
 
 - You have full ownership of your data.
 - You can request complete deletion of your account and associated profile data at any time through the platform settings or by contacting our support team.
-- Upon account deletion, all profile metadata, usernames, and 2FA credentials will be permanently purged from our database.
+- Upon account deletion, all profile metadata, usernames, and the World ID linkage record will be permanently purged from our database.
 
 ---
 

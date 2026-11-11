@@ -13,8 +13,8 @@ La plataforma permite explorar portafolios, realizar reservas (bookings), establ
 *   **Frontend / Framework:** [Next.js v15+](https://nextjs.org/) (App Router), React 18, TypeScript.
 *   **Estilos y UI:** [Tailwind CSS](https://tailwindcss.com/) y [ShadCN UI](https://ui.shadcn.com/) (Radix Primitives).
 *   **Base de Datos y Backend:** Firebase Realtime Database (Nodos JSON estructurados) y Firebase Authentication. *Nota: Firebase Storage fue eliminado por completo. Las imágenes de perfil y obras de arte se almacenan en la cuenta de Google Drive de cada usuario (carpeta "Inkfinity Artworks"), y las obras NFT se suben a IPFS. El módulo de almacenamiento se encuentra en `src/lib/google-drive.ts`.*
-*   **Inteligencia Artificial (Server-Side):** Google AI & Genkit (`@genkit-ai/google-genai`). Se usa para generación de biografías, tagging automático de imágenes, moderación de contenido y validación de 2FA facial (comparación de frames).
-*   **Inteligencia Artificial (Client-Side):** MediaPipe Tasks Vision (detección facial y liveness: blink + head motion) consumido desde `/public/models/`. *La antigua capa de embeddings de face-api.js fue eliminada.*
+*   **Inteligencia Artificial (Server-Side):** Google AI & Genkit (`@genkit-ai/google-genai`). Se usa para generación de biografías, tagging automático de imágenes, moderación de contenido y asistencia del onboarding. Toda la inferencia ocurre en el servidor mediante Server Actions.
+*   **IA en cliente:** ninguna. Los modelos faciales (MediaPipe, face-api.js) y `/public/models/` fueron eliminados junto con el 2FA biométrico; el navegador no ejecuta inferencia.
 *   **Hosting:** Vercel (dominio canónico `https://inkfinity-ten.vercel.app`). Firebase se usa **solo** como backend (Authentication, Realtime Database y sus security rules); el web app **no** se sirve desde Firebase Hosting.
 *   **Web3 y Blockchain:** Ethers.js (`^6.17.0`) y **Worldcoin MiniKit** (`@worldcoin/minikit-js`) con **SIWE**. El pago soportado es **únicamente el nativo con WLD dentro de la World App**; WalletConnect/Reown (AppKit) fue **eliminado por completo**. La red de producción es **WorldChain Mainnet** (chain ID 480, token nativo **WLD**); también se soportan WorldChain Sepolia, Polygon y Amoy. La capa de integración está en `src/lib/world-app.ts`.
 
@@ -76,10 +76,10 @@ Si vas a desarrollar o modificar características en este proyecto, DEBES adheri
 ---
 *Documento autogenerado para el contexto de Agentes de Programación de IA en el entorno Google AI Studio.*
 
-## 7. Verificación de Humanidad con World ID (ex 2FA facial)
+## 7. Verificación de Humanidad con World ID
 
 - **Sistema actual**: la verificación facial (MediaPipe + Gemini) fue **eliminada** y reemplazada por **World ID 4.0** (prueba de humanidad con nullifier único). Referencia completa: `docs/WORLD_ID.md`.
-- **Acciones**: `inkfinity-auth` (login/signup) e `inkfinity-account` (vincular desde ajustes). Ambas deben existir en el Developer Portal.
+- **Acción**: `inkfinity-account` es la única que usa la app (login, signup y vinculación desde ajustes), centralizada en `src/lib/worldid-action.ts`. El nullifier está *scoped* a `(app, action)`, así que dos acciones distintas harían que el login no encuentre lo vinculado desde ajustes.
 - **Verificación server-side**: el backend firma el RP context y reenvía el resultado de IDKit sin remapear a `https://developer.world.org/api/v4/verify/{rp_id}`. El cliente nunca decide el resultado.
 - **Variables**: `NEXT_PUBLIC_WORLD_APP_ID`, `WORLD_ID_RP_ID` (o `WORLD_RP_ID`), `RP_SIGNING_KEY` (secreta) y `WORLD_ID_ENVIRONMENT` (`production`/`staging`).
 - **Anti-abuso**: hash del payload en transacción (anti-replay), nullifier normalizado y vinculado de forma atómica a una sola cuenta, y `503 WORLDID_UNAVAILABLE` ante fallos del verificador (fail closed).

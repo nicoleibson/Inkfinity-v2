@@ -26,7 +26,7 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 *   **Admin-to-User Chat:** Real-time messaging restricted to communication between administrators and users for platform support. Users contact each other via their social media links (WhatsApp, Instagram, Telegram) displayed on their profiles.
 *   **Comprehensive Admin & Moderation Panel:** Tools for administrators to manage users, configure platform settings (including the active blockchain network), and moderate content. Includes a dedicated DB Cleanup module (`/admin/cleanup`) and terminal scripts (`run-cleanup.sh`) to purge obsolete data.
 *   **Referral & Commission Ecosystem:** Multi-role referral system allowing Super-Administrators to assign referral codes to any user role (Artists, Studios, Supply Stores, Clients, and Administrators). Includes real-time discount calculation, automatic weekly commission tracking, an interactive metrics dashboard with Recharts, and automated on-chain payouts in WLD on World Chain.
-*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. **World ID** is used for 2FA/sybil resistance, replacing legacy verification mechanisms. See [`docs/WORLD_ID.md`](docs/WORLD_ID.md).
+*   **Security-First Approach:** Features include AI-powered content moderation, NFT ownership verification, multi-session detection, and re-authentication for sensitive admin actions. **World ID** provides proof of humanity and sybil resistance for signup, login and account linking, replacing the legacy face-based second factor. See [`docs/WORLD_ID.md`](docs/WORLD_ID.md).
 
 ## Tech Stack
 

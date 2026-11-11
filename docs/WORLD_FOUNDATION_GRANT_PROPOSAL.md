@@ -33,7 +33,7 @@ By integrating **World ID** and **World Chain (WLD)**, Inkfinity solves two mass
 Inkfinity is **not an unproven concept**; a fully functional production-grade MVP is already built and working:
 - **World App MiniApp:** Complete integration with `@worldcoin/minikit-js` (SIWE authentication and ERC-20 WLD transaction execution).
 - **Hardened Backend:** Anti-replay proof hashing, atomic nullifier reservations in real-time database, and cloud verifier checks.
-- **Dual Verification 2FA:** Lightweight client-side liveness detection (Google MediaPipe) with AI-assisted verification (`gemini-3.8-flash`) and HMAC-signed session grants for studio security.
+- **Proof of Humanity:** **World ID 4.0** (Orb uniqueness proof) verified server-side, with a per-action nullifier linked atomically to a single account for sybil resistance and studio security.
 - **Decentralized Storage:** Portfolios and artwork collections indexed via IPFS and user cloud storage (no centralized vendor lock-in).
 
 ---

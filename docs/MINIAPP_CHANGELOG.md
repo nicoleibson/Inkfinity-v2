@@ -42,9 +42,10 @@ one account.
 
 - Added **World ID 4.0** as the proof-of-humanity layer for account signup,
   login and account linking.
-- Two actions are registered in the Developer Portal and used by the app:
-  `inkfinity-auth` (signup/login) and `inkfinity-account` (link an existing
-  account from Settings).
+- A single action, `inkfinity-account`, covers signup, login and linking an
+  existing account from Settings. One action is required because a nullifier is
+  scoped to `(app, action)`: the same human yields a different nullifier per
+  action, so splitting the flows would hide accounts linked in the other one.
 - The backend issues the RP signature and verifies every proof server-side. The
   client never decides the outcome, and no biometric data reaches our servers.
 - Each proof produces a nullifier scoped to `(app, action)`. It is normalized and
@@ -155,8 +156,8 @@ Payments move real WLD on World Chain. Use a small amount when testing.
 - [x] Support email set to `support@inkfinity.app` (same address published in the
       privacy policy).
 - [x] Public copy no longer describes the app as a demo, beta or work in progress.
-- [ ] Confirm both actions (`inkfinity-auth`, `inkfinity-account`) exist in the
-      Developer Portal for the same app.
+- [ ] Confirm the `inkfinity-account` action exists in the Developer Portal for
+      the app (a leftover `inkfinity-auth` entry is harmless).
 - [ ] Confirm the production domain is registered and the Mini App permissions
       list only the WLD token and WLD contract above.
 - [ ] Run the reviewer walkthrough above inside World App end-to-end.
