@@ -68,7 +68,19 @@ export async function GET(request: NextRequest): Promise<Response> {
   let decodedClaims: { uid: string };
   try {
     const adminAuth = getAdminAuth();
-    decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie, true));
+    try {
+      // Prefer the full check (signature + revocation), which costs one Admin
+      // API round-trip.
+      decodedClaims = await withTimeout('verifySessionCookie', adminAuth.verifySessionCookie(sessionCookie, true));
+    } catch (error) {
+      if (isTokenRejection(error)) throw error;
+      // The revocation lookup needs an OAuth token. If that outage/failure is
+      // what broke the call, the cookie may still be perfectly valid, so fall
+      // back to the local signature/expiry check instead of logging the member
+      // out (which is what a 503 used to do to the middleware).
+      console.warn(`[verify-session] revocation check failed, verifying locally:`, error);
+      decodedClaims = await withTimeout('verifySessionCookie (local)', adminAuth.verifySessionCookie(sessionCookie, false));
+    }
     lap('verifySessionCookie done');
   } catch (error) {
     if (isTokenRejection(error)) {

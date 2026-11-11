@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth } from '@/lib/firebase-admin';
+import { getAdminApp, getAdminAuth } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 // Firebase Admin cold start + Google Auth/RTDB round-trips can exceed Vercel's
@@ -48,6 +48,21 @@ export async function POST(request: NextRequest): Promise<Response> {
     const adminAuth = getAdminAuth();
     lap('admin ready');
 
+    // Force a fresh OAuth access token before anything that needs one. The
+    // Admin SDK caches the in-flight token promise on the app instance; if a
+    // credential/token request fails synchronously, that cache can be left
+    // empty while `isRefreshing` stays true, and every later call fails with
+    // the misleading "Cannot read properties of undefined (reading 'then')".
+    // Requesting it here (force = true) either heals the cache or surfaces the
+    // real credential error.
+    const appInternals = (getAdminApp() as unknown as {
+      INTERNAL?: { getToken?: (forceRefresh?: boolean) => Promise<unknown> };
+    }).INTERNAL;
+    if (appInternals?.getToken) {
+      await withTimeout('accessToken', appInternals.getToken(true));
+      lap('accessToken done');
+    }
+
     // Verify the ID token
     const decodedClaims = await withTimeout('verifyIdToken', adminAuth.verifyIdToken(idToken));
     lap('verifyIdToken done');
@@ -84,6 +99,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   } catch (error: any) {
     console.error(`[session] failed after ${Date.now() - t0}ms:`, error);
     const message = error?.message || 'Failed to create session';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, code: error?.code ?? null }, { status: 500 });
   }
 }
