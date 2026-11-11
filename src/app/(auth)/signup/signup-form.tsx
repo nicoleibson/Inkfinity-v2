@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Palette, Sparkles, User as UserIcon, CheckCircle, MailCheck, Chrome, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { generateOnboardingContent } from "@/ai/flows/onboarding-assistant";
+import { WORLD_ID_ACTION } from "@/lib/worldid-action";
 import { moderateImage } from "@/ai/flows/image-moderation";
 import type { GenerateOnboardingContentOutput } from "@/ai/schemas/onboarding-assistant-schema";
 import { useToast } from "@/hooks/use-toast";
@@ -197,7 +198,7 @@ export default function SignupForm() {
 
       const request = await IDKit.request({
         app_id: (process.env.NEXT_PUBLIC_WORLD_APP_ID || '') as `app_${string}`,
-        action: 'inkfinity-auth',
+        action: WORLD_ID_ACTION,
         rp_context: {
           rp_id: rp.rp_id,
           nonce: rp.nonce,

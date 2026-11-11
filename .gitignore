@@ -39,6 +39,9 @@ firestore-debug.log
 *.swo
 *.kate-swp
 *~
+# exported chat/session transcripts (large, not source)
+session-*.md
+
 # vercel
 .vercel
 

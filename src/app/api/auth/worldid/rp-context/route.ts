@@ -51,7 +51,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     const { sig, nonce, createdAt, expiresAt } = signRequest({
       signingKeyHex: signingKey,
-      action: 'inkfinity-auth', // Different action for auth vs verification
+      // Same action as the Settings link and signup flows: a nullifier is
+      // scoped to (rp, action), so one action must cover every use.
+      action: WORLD_ID_ACTION,
     });
 
     return NextResponse.json({

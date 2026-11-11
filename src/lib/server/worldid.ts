@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Database } from 'firebase-admin/database';
+import { WORLD_ID_ACTION } from '@/lib/worldid-action';
 
 /**
  * Server-side World ID verification.
@@ -44,8 +45,12 @@ export type WorldIdVerifyResult =
   | { ok: true; nullifier: string }
   | { ok: false; status: number; error: string; unavailable?: boolean };
 
-/** The Developer Portal scopes a nullifier to (rp, action), so this is a namespace. */
-export const WORLD_ID_ACTION = 'inkfinity-account';
+/**
+ * The Developer Portal scopes a nullifier to (rp, action), so this is a namespace.
+ * The value lives in `@/lib/worldid-action` because client components need the
+ * same literal; it is re-exported here so server callers keep one import.
+ */
+export { WORLD_ID_ACTION };
 
 const VERIFY_ENDPOINT = 'https://developer.world.org/api/v4/verify';
 const REQUEST_TIMEOUT_MS = 20_000;

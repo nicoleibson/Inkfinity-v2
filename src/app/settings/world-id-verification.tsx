@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CheckCircle2, Fingerprint, Loader2, ShieldCheck } from 'lucide-react';
+import { WORLD_ID_ACTION } from '@/lib/worldid-action';
 
 /**
  * Links a World ID to the signed-in account.
@@ -46,7 +47,7 @@ export default function WorldIdVerification({ verified, verifiedAt }: { verified
 
       const request = await IDKit.request({
         app_id: appId as `app_${string}`,
-        action: 'inkfinity-account',
+        action: WORLD_ID_ACTION,
         rp_context: {
           rp_id: rp.rp_id,
           nonce: rp.nonce,

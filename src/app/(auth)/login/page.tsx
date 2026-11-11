@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { get, ref, update } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 import { saveProof } from '@/utils/worldid-proof';
+import { WORLD_ID_ACTION } from '@/lib/worldid-action';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 function formatAuthError(err: any): string {
@@ -212,6 +213,7 @@ function LoginForm() {
   const handleWorldIdLogin = async () => {
     setLoading(true);
     setError(null);
+    setUnlinked(false);
     try {
       const { IDKit, orbLegacy } = await import('@worldcoin/idkit');
 
@@ -228,7 +230,7 @@ function LoginForm() {
 
       const request = await IDKit.request({
         app_id: (process.env.NEXT_PUBLIC_WORLD_APP_ID || '') as `app_${string}`,
-        action: 'inkfinity-auth',
+        action: WORLD_ID_ACTION,
         rp_context: {
           rp_id: rp.rp_id,
           nonce: rp.nonce,
@@ -296,7 +298,7 @@ function LoginForm() {
 
       const request = await IDKit.request({
         app_id: (process.env.NEXT_PUBLIC_WORLD_APP_ID || '') as `app_${string}`,
-        action: 'inkfinity-auth',
+        action: WORLD_ID_ACTION,
         rp_context: {
           rp_id: rp.rp_id,
           nonce: rp.nonce,
@@ -402,6 +404,20 @@ function LoginForm() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Login Failed</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {unlinked && (
+            <Alert>
+              <ShieldCheck className="h-4 w-4" />
+              <AlertTitle>World ID not linked</AlertTitle>
+              <AlertDescription>
+                This World ID is not linked to an Inkfinity account yet. Create an account with it, or link it
+                from{' '}
+                <Link href="/settings" className="underline hover:text-primary">
+                  Settings → Security
+                </Link>
+                .
+              </AlertDescription>
             </Alert>
           )}
           <div className="grid gap-2">
