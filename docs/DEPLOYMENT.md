@@ -52,7 +52,11 @@ Configúralas en **Vercel → Project → Settings → Environment Variables**, 
 | `FIREBASE_CLIENT_EMAIL` | server | service account para escrituras admin en RTDB |
 | `FIREBASE_PRIVATE_KEY` | server | clave privada del service account (con `\n` literales) |
 | `GEMINI_API_KEY` | server | Genkit AI |
-| `FACE_VERIFICATION_SECRET` | server | **clave HMAC** de la verificación facial 2FA (obligatoria; `openssl rand -base64 48`). Sin ella el servidor lanza error en producción |
+| `WORLD_ID_RP_ID` | server | `rp_...` del Developer Portal (legacy: `WORLD_RP_ID`) |
+| `RP_SIGNING_KEY` | server | clave de firma del RP: 64 hex (66 con `0x`). Secreta |
+| `WORLD_ID_ENVIRONMENT` | server | `production` (default) o `staging` (solo pruebas) |
+| `PLATFORM_WALLET_PRIVATE_KEY` | server | clave privada de la wallet de tesorería para payouts de referidos on-chain |
+| `WORLDCHAIN_RPC_URL` | server | RPC para los payouts on-chain (fallback: RPC público de Alchemy) |
 
 > **Importante:** añadir una variable nueva a un proyecto ya desplegado **no** la hace disponible en el bundle sin un **rebuild**. Tras cambiar cualquier `NEXT_PUBLIC_*`, redeploy (rebuild), no basta con un restart.
 
@@ -116,14 +120,13 @@ firebase deploy --only storage  --project inkfinity-2d470
 ## 4. Verificación post-despliegue
 
 - [ ] `https://inkfinity-ten.vercel.app` carga sin errores de Firebase.
-- [ ] `/verify-face` abre la cámara en iPhone/escritorio.
-- [ ] `/settings` → activar 2FA facial → registrar rostro → verificar.
-- [ ] "Email me a secure link" envía correo y el link completa la verificación **desde otro dispositivo**.
-- [ ] 3 intentos fallidos activan el bloqueo (`facialAttempts` en RTDB).
+- [ ] `/settings` → "Proof of Humanity" → verificar con World ID y ver el badge en el perfil.
+- [ ] Login/signup con World ID completan y muestran el badge "World ID Verified".
+- [ ] Reenviar la misma prueba devuelve rechazo por replay.
 - [ ] **Server Actions funcionan** desde el dominio desplegado. Si aparece `Invalid Server Actions request`, falta el dominio en `experimental.serverActions.allowedOrigins` de `next.config.js` (ahí debe estar `inkfinity-ten.vercel.app`).
 - [ ] El pago solo funciona dentro de la **World App** (no hay conexión de wallet externa).
 - [ ] La red efectiva es **WorldChain Mainnet** (símbolo WLD) en `/admin` y en el badge del navbar.
-- [ ] La consola no muestra errores de CSP: Firebase **Realtime Database** (JSONP a `*.firebaseio.com`) y Auth cargan sin bloqueos. Si aparece `... violates ... script-src`, falta `https://*.firebaseio.com` en `script-src` (ver `docs/FACIAL_VERIFICATION.md` §9).
+- [ ] La consola no muestra errores de CSP: Firebase **Realtime Database** (JSONP a `*.firebaseio.com`) y Auth cargan sin bloqueos. Si aparece `... violates ... script-src`, falta `https://*.firebaseio.com` en `script-src` (ver la sección CSP de este documento).
 - [ ] La geolocalización funciona en `/`, `/settings` y `/search` (`Permissions-Policy: geolocation=(self)`).
 - [ ] `/api/ipfs` genera metadatos con `external_url` = `https://inkfinity-ten.vercel.app`.
 - [ ] Dentro de la World App: la conexión pide firma SIWE y el pago devuelve `userOpHash`.

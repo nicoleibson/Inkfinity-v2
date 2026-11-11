@@ -36,7 +36,7 @@ Toda la persistencia ocurre en Firebase Realtime Database. La seguridad está co
 
 *   **`src/app/`**: Rutas de Next.js (Server & Client Components).
     *   `/auth`: Flujos de login, registro (email/password, OAuth).
-    *   `/verify-face`: Módulo avanzado de autenticación 2FA usando la cámara web (detección de liveness (parpadeo) + validación de IA).
+    *   `/settings` → "Proof of Humanity": vinculación de World ID a una cuenta existente (el 2FA facial fue eliminado).
     *   `/dashboard`: Panel principal segmentado según el Rol del usuario (estadísticas de artista vs historial de cliente).
     *   `/artwork` y `/upload`: Visor de arte y módulo para subir nuevas piezas al portafolio (con auto-tagging de IA).
     *   `/chat`: Mensajería en tiempo real embebida.
@@ -76,11 +76,11 @@ Si vas a desarrollar o modificar características en este proyecto, DEBES adheri
 ---
 *Documento autogenerado para el contexto de Agentes de Programación de IA en el entorno Google AI Studio.*
 
-## 7. Seguridad de Verificación Facial (2FA) — Actualización
+## 7. Verificación de Humanidad con World ID (ex 2FA facial)
 
-- **Enforcement con HMAC firmado**: Las cookies `face_req_signed` y `face_verified_signed` (httpOnly) se firman con `FACE_VERIFICATION_SECRET` (HMAC-SHA256 vía Web Crypto, compatible con Edge Runtime). El grant sólo se emite tras volver a ejecutar la comparación facial en servidor (`/api/auth/face-verified`) contra el scan registrado en la base de datos.
-- **Fail-safe ante outages**: `/api/auth/verify-session` devuelve 503 (no 401) ante fallos de infraestructura; el middleware sigue aplicando el requisito firmado, evitando expulsar usuarios por caídas temporales.
-- **Gated por membresía activa**: La verificación facial solo se exige/permite para usuarios con membresía paga activa (`src/lib/utils/membership.ts`). Se comprueba en middleware, en el endpoint de grant y en ajustes.
-- **Logout**: `POST /api/auth/logout` borra las cookies firmadas httpOnly.
-- **Variable requerida**: `FACE_VERIFICATION_SECRET` debe existir en Vercel (Production/Preview) y `.env.local`. En producción el código lanza error si falta para no firmar con clave insegura.
-- **Referencia completa**: `docs/FACIAL_VERIFICATION.md` documenta el sistema end-to-end (capas, contrato de API, umbrales, modelo de datos, variables de entorno, CSP y checklist para reproducirlo en otro proyecto).
+- **Sistema actual**: la verificación facial (MediaPipe + Gemini) fue **eliminada** y reemplazada por **World ID 4.0** (prueba de humanidad con nullifier único). Referencia completa: `docs/WORLD_ID.md`.
+- **Acciones**: `inkfinity-auth` (login/signup) e `inkfinity-account` (vincular desde ajustes). Ambas deben existir en el Developer Portal.
+- **Verificación server-side**: el backend firma el RP context y reenvía el resultado de IDKit sin remapear a `https://developer.world.org/api/v4/verify/{rp_id}`. El cliente nunca decide el resultado.
+- **Variables**: `NEXT_PUBLIC_WORLD_APP_ID`, `WORLD_ID_RP_ID` (o `WORLD_RP_ID`), `RP_SIGNING_KEY` (secreta) y `WORLD_ID_ENVIRONMENT` (`production`/`staging`).
+- **Anti-abuso**: hash del payload en transacción (anti-replay), nullifier normalizado y vinculado de forma atómica a una sola cuenta, y `503 WORLDID_UNAVAILABLE` ante fallos del verificador (fail closed).
+- **Histórico**: el sistema facial y su variable `FACE_VERIFICATION_SECRET` ya no se usan; ver `docs/archive/FACIAL_VERIFICATION.md`.

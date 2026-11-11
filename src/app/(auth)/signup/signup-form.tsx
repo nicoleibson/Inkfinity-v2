@@ -293,7 +293,6 @@ export default function SignupForm() {
             followingCount: 0,
             artworksCount: 0,
             collectionCount: 0,
-            twoFactorEnabled: false,
             storageUsed: 0,
             trialEndsAt: trialEndsAt,
             artistRequestStatus: 'none',

@@ -130,9 +130,15 @@ FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 # Genkit AI (server-side):
 GEMINI_API_KEY=
-# HMAC key for facial-verification 2FA grants (face_req_signed / face_verified_signed).
-# REQUIRED in production — the server throws if missing. Generate with: openssl rand -base64 48
-FACE_VERIFICATION_SECRET=
+# World ID 4.0 (proof of humanity)
+NEXT_PUBLIC_WORLD_APP_ID=
+WORLD_ID_RP_ID=
+RP_SIGNING_KEY=
+WORLD_ID_ENVIRONMENT=production
+
+# On-chain referral payouts (Super-Administrator only)
+PLATFORM_WALLET_PRIVATE_KEY=
+WORLDCHAIN_RPC_URL=
 ```
 
 > **Important for deployment:** Vercel does **not** read `.env.local`. The `NEXT_PUBLIC_*` variables must be set in **Vercel → Project → Settings → Environment Variables** (they are inlined at build time). See `docs/DEPLOYMENT.md`.
@@ -150,7 +156,7 @@ When the app runs inside the World App, `src/lib/world-app.ts` detects it (`Mini
 Requirements:
 
 1. `NEXT_PUBLIC_WORLD_APP_ID` (from <https://developer.world.org>) — used by `MiniKit.install()`.
-2. `WORLD_RP_ID` (same portal) if World ID / IDKit will be used. MiniKit itself does not consume it.
+2. `WORLD_ID_RP_ID` (or legacy `WORLD_RP_ID`) and `RP_SIGNING_KEY` are required by IDKit/World ID. MiniKit itself does not consume them. See `docs/WORLD_ID.md`.
 3. **Register the site domain in the Developer Portal.** MiniKit derives the SIWE `domain` and `uri` from `window.location`, and the World App rejects unregistered domains. Localhost works only with a dev-app; for a real device use the deployed Vercel domain.
 
 In-World-App behaviour:
@@ -159,14 +165,14 @@ In-World-App behaviour:
 - Payments use `MiniKit.sendTransaction`, which returns a **userOpHash** (ERC-4337), not a conventional `txHash`. See `docs/ADVANCED_INTEGRATIONS.md` for the verification pipeline and its current limitations.
 - Transactions cannot be awaited with `tx.wait()`; the userOp must be resolved through the Developer Portal.
 
-## Camera & HTTPS (facial verification 2FA)
+## Camera & HTTPS
 
-The facial 2FA feature requires a **camera** and therefore a **secure context**:
+Some optional flows (avatar capture) use the camera and therefore need a **secure context**:
 
 - **Local development:** run on `localhost` (secure-context exemption): `npm run dev` → http://localhost:3000
-- **Real devices (phone):** the app must be served over **HTTPS**. Testing over `http://<your-ip>:3000` will fail with "Camera Not Supported Here". Use the deployed Vercel URL or a tunnel (`cloudflared`, `ngrok`); see `docs/DEPLOYMENT.md`.
+- **Real devices (phone):** the app must be served over **HTTPS**. Testing over `http://<your-ip>:3000` will fail. Use the deployed Vercel URL or a tunnel (`cloudflared`, `ngrok`); see `docs/DEPLOYMENT.md`.
 
-Full reproducible reference for the facial 2FA pipeline (dependencies, model assets, API contract, thresholds, CSP) is in `docs/FACIAL_VERIFICATION.md`.
+World ID verification does **not** use the camera in the browser; it opens the World App. See `docs/WORLD_ID.md`.
 
 ## GitHub Configuration
 

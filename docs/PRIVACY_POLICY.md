@@ -27,12 +27,10 @@ Inkfinity is built around **privacy-preserving decentralized principles**. Whene
 - **Profile Details:** Display name, bio, social media links (Instagram, WhatsApp, Telegram), artistic style, and profile avatar.
 - **Portfolios:** Images and artwork descriptions uploaded by artists to showcase their work.
 
-### C. Optional Facial 2FA (Biometric Liveness Verification)
-- If you voluntarily activate Two-Factor Authentication (2FA) with Facial Scan:
-  - Face landmark analysis and liveness checks (blink and head orientation) occur in your local device browser using Google MediaPipe.
-  - Verification comparison is performed server-side solely to confirm that the person logging in matches the registered account owner.
-  - We do **not** use your images to train public AI models.
-  - You can disable 2FA at any time from your account settings.
+### C. Proof of Humanity (World ID)
+- If you choose to verify with World ID, the proof is generated on your device and validated through World's verifier.
+- We receive only a pseudonymous nullifier scoped to Inkfinity and the action performed. We do **not** receive or store iris scans, facial images, biometric templates, passport numbers or government IDs.
+- The nullifier is used solely to prevent duplicate accounts and to mark the account as human-verified.
 
 ---
 

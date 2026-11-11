@@ -1,4 +1,10 @@
-# Verificación Facial (2FA) — Referencia y Guía de Reproducción
+# Verificación Facial (2FA) — Referencia histórica
+
+> ⚠️ **OBSOLETO / ARCHIVADO.** Este sistema fue **eliminado** del código en el
+> commit `df4df82` (octubre 2026) y reemplazado por **World ID** (ver
+> [`docs/WORLD_ID.md`](../WORLD_ID.md)). El documento se conserva solo como
+> referencia histórica de implementación. Las rutas, variables (`FACE_VERIFICATION_SECRET`),
+> componentes y utilidades que menciona **ya no existen** en el proyecto.
 
 Documento autónomo que describe el sistema completo de **verificación facial como segundo factor de autenticación (2FA)** de Inkfinity, con el nivel de detalle necesario para **reproducirlo externamente en otro proyecto** (mismo stack: Next.js App Router + Firebase + Genkit/Gemini + MediaPipe).
 

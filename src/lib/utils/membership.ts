@@ -7,7 +7,7 @@ const PAYING_ROLES: readonly string[] = ['Tattoo Artist', 'Studio', 'Supply Stor
 /**
  * Whether the account holds a currently valid paid annual membership.
  *
- * Facial verification is gated on this, so the check has to fail closed: a lapsed
+ * Paid features are gated on this, so the check has to fail closed: a lapsed
  * period must not be resurrected by an old `paymentDate` sitting in the profile.
  * `paymentDate` only counts for Studio / Supply Store accounts, which are activated
  * by a one-off registration payment and carry no `trialEndsAt` period.
@@ -18,7 +18,7 @@ export function hasActiveMembership(profile: Partial<UserProfile> | null | undef
   // Platform operators sit outside the membership scheme.
   if (profile.role === 'Administrator' || profile.role === 'Super-Administrator') return true;
 
-  // Client accounts are free, so facial verification stays unavailable to them.
+  // Client accounts are free, so paid membership features stay unavailable to them.
   if (!PAYING_ROLES.includes(profile.role)) return false;
 
   if (profile.status !== 'active') return false;

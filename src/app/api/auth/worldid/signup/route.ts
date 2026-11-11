@@ -156,7 +156,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       followingCount: 0,
       artworksCount: 0,
       collectionCount: 0,
-      twoFactorEnabled: false,
       storageUsed: 0,
       trialEndsAt,
       artistRequestStatus: 'none',

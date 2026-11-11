@@ -44,8 +44,8 @@ Esta promoción es válida para todas las activaciones y renovaciones realizadas
 To get the project up and running locally, please refer to the detailed instructions in the `docs/` directory:
 
 1.  **`docs/SETUP.md`**: Firebase CLI link, the full `.env.local` reference (Firebase, WorldChain RPCs, World App IDs), and Git setup.
-2.  **`docs/DEPLOYMENT.md`**: Deploying to **Vercel** (environment variables, authorized domains, World App domain allowlist, WorldChain settings, CSP) so camera + facial 2FA + email link and payments work on real devices.
-3.  **`docs/FACIAL_VERIFICATION.md`**: Standalone, reproducible reference for the **facial 2FA system** (layered pipeline, API contract, thresholds, data model, env vars, CSP).
+2.  **`docs/DEPLOYMENT.md`**: Deploying to **Vercel** (environment variables, authorized domains, World App domain allowlist, WorldChain settings, CSP) so World ID verification and payments work on real devices.
+3.  **`docs/WORLD_ID.md`**: Proof-of-humanity reference: Developer Portal setup (`app_id`, `rp_id`, signing key, actions), IDKit flow, environment handling, data model and troubleshooting.
 4.  **`docs/ADVANCED_INTEGRATIONS.md`**: Server-side logic and AI flows, plus the **WorldChain + MiniKit** architecture and the current limitations of the userOp payment verification.
 5.  **`docs/SECURITY.md`**: An in-depth overview of the platform's security architecture.
 6.  **`docs/TROUBLESHOOTING.md`**: Common issues — camera/HTTPS, Firebase JSONP CSP, geolocation, World App SIWE, `no such account`, and userOperation verification.

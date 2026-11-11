@@ -12,7 +12,6 @@ All server-side AI logic is implemented with [Genkit](https://firebase.google.co
 
 | Flow | Agent | Purpose |
 | --- | --- | --- |
-| `verifyFace` | `verify-face-agent.ts` | Compares the registered facial scan + 3 chronological live captures (sent as data URIs), returns `isMatch` + `confidence` (0-1). Rejection needs `confidence ≥ 0.92` (enforced server-side in `api/auth/face-verified`). See `docs/FACIAL_VERIFICATION.md`. |
 | `generateArtworkDetails` | `artwork-details-generation-agent.ts` | Generates title, description, and tags for uploaded artwork. |
 | `moderateImage` | `image-moderation-agent.ts` | Scans images for inappropriate content and blocks flagged uploads. |
 | `generateOnboardingContent` | `onboarding-assistant-agent.ts` | Creates a professional bio and avatar for new users. |
@@ -22,20 +21,9 @@ All server-side AI logic is implemented with [Genkit](https://firebase.google.co
 
 Each flow has a **Zod schema** in `src/ai/schemas/` (strict input/output validation) and a thin wrapper in `src/ai/flows/`. Genkit is configured in `src/ai/genkit.ts` (Google GenAI provider; API key resolution: `GEMINI_API_KEY` → `GOOGLE_GENAI_API_KEY` → `GOOGLE_API_KEY` → `NEXT_PUBLIC_*`).
 
-> Prompt/media payloads use Genkit's `{{media url=...}}` syntax; the verify-face agent receives up to 4 images per call.
-
 ### Firebase Cloud Functions (`inkfinity-ml/`)
 
 A separate Node.js directory (`inkfinity-ml/`) hosts Firebase Functions (v2) using `firebase-admin` with Application Default Credentials (`admin.initializeApp()`). It currently provides admin-side automation such as reconciling Realtime Database users with Firebase Authentication.
-
-### Client-Side ML (`src/lib/client/`)
-
-Heavy vision models run in the browser (not on the server) so the AI layer only consumes small JPEG data URIs:
-
-- **`face-capture.ts`** — MediaPipe FaceDetector + FaceLandmarker (local WASM + `.tflite`/`.task` in `public/models/`), frame compression, and the liveness sequence (blink + head motion).
-- **`camera.ts`** — camera access with actionable diagnostics (HTTPS check, permissions, device-in-use).
-
-> The former `face-recognition.ts` (face-api.js embeddings) was removed; identity is decided server-side by the Gemini comparison. See `docs/FACIAL_VERIFICATION.md`.
 
 ### WorldChain + Worldcoin MiniKit (`src/lib/world-app.ts`)
 

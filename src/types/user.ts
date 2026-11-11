@@ -53,10 +53,6 @@ export interface UserProfile {
     followersList?: { [key: string]: boolean };
     followingList?: { [key: string]: boolean };
     isPrivate?: boolean;
-    twoFactorEnabled?: boolean;
-    facialScanUrl?: string | null;
-    facialDescriptor?: number[] | null;
-    facialAttempts?: { failed: number; lockedUntil: number | null } | null;
     artistRequestStatus?: 'none' | 'pending' | 'approved' | 'rejected';
     trialEndsAt?: string | null;
     googleDriveFolderId?: string | null;

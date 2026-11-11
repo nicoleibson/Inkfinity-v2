@@ -7,7 +7,7 @@ This document provides solutions for common problems you might encounter while d
 ## Camera: "Camera Not Supported Here" / "dispositivo no detectado"
 
 ### Problem
-Activating facial verification shows a camera error and no preview ever appears. On a phone (e.g. iPhone) this typically shows as "Camera Not Supported Here" or simply "no device".
+Opening a camera-based flow (profile/avatar capture) shows a camera error and no preview ever appears. On a phone (e.g. iPhone) this typically shows as "Camera Not Supported Here" or simply "no device".
 
 ### Cause
 The most common cause is **opening the app over HTTP** instead of HTTPS. Browsers only expose `navigator.mediaDevices` to secure contexts (HTTPS or `localhost`). Opening `http://192.168.x.x:3000` from a phone over your LAN hits this immediately.
@@ -21,26 +21,14 @@ Other causes, in order of frequency:
 - Use **HTTPS**: production is already on Vercel (`https://inkfinity-ten.vercel.app`), or run `cloudflared tunnel --url http://localhost:3000` / `ngrok http 3000` and open the `https://` URL on the phone (see `docs/DEPLOYMENT.md`).
 - Check the browser/OS camera permissions and reload the page.
 - Close apps using the camera.
-- Uses `src/lib/client/camera.ts`, which detects the specific cause and shows a **targeted toast + persistent banner with a "Try Again" button** (`face-verifier.tsx`, `settings/page.tsx`). Read the banner text: it tells you which of the cases above it is.
-
----
-
-## Email link fallback: "No pending email found" / invalid link
-
-### Problem
-Clicking "Email me a secure link" and then the emailed link shows an error on `/verify-face/email-link`.
-
-### Cause / Solution
-1. **Domain not authorized:** `sendSignInLinkToEmail` requires the app to run on an **authorized domain** (Firebase Console → Authentication → Settings → Authorized domains). Add `inkfinity-ten.vercel.app`.
-2. **Different device/browser:** the legacy flow required the same browser tab (email stored in `localStorage`). This is now **supported**: the email is embedded in the link URL, so opening it on another device works — as long as account settings match and the link is fresh.
-3. **Already-verified session:** if the login was already completed, the link is single-use. Request a new one from `/verify-face`.
+- Uses `src/lib/client/camera.ts`, which detects the specific cause and surfaces a targeted message. Read the banner text: it tells you which of the cases above it is.
 
 ---
 
 ## "Invalid Server Actions request" on the deployed site
 
 ### Problem
-Server actions (`verifyFace`, `geocodeAddress`) are rejected with a `Next 400 / Invalid Server Actions request` error only on the deployed domain (works on `localhost`).
+Server actions (`geocodeAddress`, `generateArtworkDetails`, etc.) are rejected with a `Next 400 / Invalid Server Actions request` error only on the deployed domain (works on `localhost`).
 
 ### Cause
 Next.js only accepts Server Action requests from origins listed in `serverActions.allowedOrigins` in `next.config.js`. The deployed domain is missing.
@@ -97,7 +85,7 @@ Y en `connect-src` (además del long-polling):
 https://*.firebaseio.com wss://*.firebaseio.com
 ```
 
-En `frame-src` añade también `https://*.firebaseio.com`. Cambiar `next.config.js` **requiere rebuild** (no basta con redeploy). Ver `docs/FACIAL_VERIFICATION.md` §9 para la CSP completa que necesita Auth + RTDB.
+En `frame-src` añade también `https://*.firebaseio.com`. Cambiar `next.config.js` **requiere rebuild** (no basta con redeploy). Ver la sección CSP de `docs/DEPLOYMENT.md` para la política completa que necesita Auth + RTDB.
 
 ---
 
@@ -139,6 +127,8 @@ This error is deliberately **not** a rejection: it means the app could not check
 3. The `signing_key` shown in the Portal is the one configured in `RP_SIGNING_KEY`; if it ever leaked, rotate it there — clients must never hold it.
 4. Retry. Nothing is persisted on failure, so a successful retry links normally.
 
+Referencia completa (Developer Portal, acciones y entorno): `docs/WORLD_ID.md`.
+
 ## World ID: `409` "already linked to another account"
 
 ### Problem
@@ -174,34 +164,3 @@ Tras desplegar las reglas nuevas, crear una cuenta devuelve `PERMISSION_DENIED`.
 
 ### Solution
 Los campos inicializadores que el cliente sí puede escribir en el alta están permitidos explícitamente: `role` (solo los cuatro roles no privilegiados), `status` (`active` / `pending_verification` / `pending_payment`) y `referralCodeUsed: false`. Cualquier otro valor es de solo servidor (Admin SDK, que ignora las reglas). Si un flujo legítimo nuevo necesita escribir otro campo, añádelo como rama de creación en su `.validate` y con un test en `scripts/test-booking-rules.mjs`.
-
----
-
-## Verificación Facial: bucle de redirección a `/verify-face` tras verificar
-
-### Problema
-Tras completar la verificación facial, el usuario es redirigido a la página objetivo (ej. `/`) pero el middleware lo devuelve inmediatamente a `/verify-face`, en bucle.
-
-### Causa
-Los custom claims (`faceVerified`, `faceVerifiedAt`) se actualizan en Firebase Auth, pero la cookie `__session` que consume la verificación de sesión no incorpora el claim automáticamente. Sin embargo, el middleware **no depende solo del claim**: aplica el requisito firmado (`face_req_signed`) y el grant firmado (`face_verified_signed`).
-
-### Solución (implementación actual)
-El grant se transporta en una **cookie httpOnly firmada con HMAC** (`face_verified_signed`), emitida por el servidor en `POST /api/auth/face-verified` **solo tras reverificar el rostro** contra el scan de la base de datos, y atada al `uid`:
-
-1. **Servidor emite el grant** (`src/app/api/auth/face-verified/route.ts`): `setCustomUserClaims(uid, { faceVerified: true, faceVerifiedAt })` + cookie `face_verified_signed` (httpOnly, `secure` en prod, `sameSite=lax`, `path=/`, TTL 1 h).
-2. **El cliente refresca la sesión** (`src/app/verify-face/page.tsx`): tras el éxito, `auth.currentUser.getIdToken(true)` y luego `POST /api/auth/session` para volcar el claim en `__session`; después `router.push(redirect)`.
-3. **Middleware valida ambos** (`src/middleware.ts`):
-   - `face_req_signed` (¿este usuario requiere 2FA?) y `face_verified_signed` (¿grant válido y del mismo `uid`?).
-   - Además consulta `/api/auth/verify-session` (que ahora lee la sesión por el header `Authorization: Bearer`, no por query param) y comprueba `faceVerifiedAt` contra la ventana de 1 h.
-   - Un grant de **otro** `uid` **no** satisface el requisito.
-4. **Logout limpia el grant**: `POST /api/auth/logout` borra `__session` y las cookies firmadas `face_req_signed` / `face_verified_signed`.
-
-> **Nota histórica:** versiones anteriores usaban una cookie `face_verified=true` **escrita por el cliente** (`document.cookie`). Ese diseño era **forjable** y fue reemplazado por el grant HMAC httpOnly descrito arriba. No reintroducir la cookie de cliente.
-
-### Verificación
-1. Verificación OK en `/verify-face` → el servidor responde `200 { success: true, confidence >= 0.92 }` y setea `face_verified_signed`.
-2. El cliente refresca `__session` con `getIdToken(true)`.
-3. `router.push(redirect)`; el middleware ve `face_verified_signed` válido + mismo `uid` → **permite el acceso**.
-4. Tras 1 h, el middleware redirige a `/verify-face?expired=true` para reverificar.
-
-Detalle completo del contrato y de los umbrales en `docs/FACIAL_VERIFICATION.md`.
