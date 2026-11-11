@@ -98,6 +98,29 @@ mayúsculas no permitan vincular la misma persona dos veces.
    desarrollo si aplica.
 5. Para Mini Apps: el mismo `app_id` se usa como App ID de la Mini App.
 
+### Permisos de la Mini App (World Chain)
+
+La app solo transfiere **WLD** y solo llama al contrato del token, así que la
+allowlist debe ser mínima:
+
+| Campo del portal | Valor |
+| --- | --- |
+| **Tokens Permit2** | `0x2cFc85d8E48F8EAB294be644d9E25C3030863003` (WLD, 18 decimales) |
+| **Puntos de entrada del contrato** | `0x2cFc85d8E48F8EAB294be644d9E25C3030863003` (contrato WLD ERC-20) |
+
+No agregar nada más:
+
+- **USDC u otras stablecoins**: la app no las usa (pagos solo en WLD).
+- **Wallet de tesorería** (`0xA908…` / `0x70c4…`): son EOA receptoras, no contratos;
+  el ERC-20 se transfiere llamando al contrato WLD.
+- **Contratos NFT**: solo se leen por RPC (`ownerOf`/`balanceOf`), no se llaman
+  desde la Mini App.
+- **EntryPoint ERC-4337**: lo invoca el bundler, no la Mini App. Listarlo solo si
+  el portal lo exige explícitamente.
+
+Cualquier token o contrato que no esté en la lista será bloqueado, por eso conviene
+mantenerla en el mínimo necesario.
+
 ## Troubleshooting
 
 | Síntoma | Causa probable | Solución |
