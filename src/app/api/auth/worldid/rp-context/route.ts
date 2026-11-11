@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signRequest } from '@worldcoin/idkit-core/signing';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/server/rate-limit';
 import { WORLD_ID_ACTION, getWorldIdRpId, getWorldIdSigningKey, getWorldIdEnvironment } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
@@ -14,6 +15,16 @@ export const maxDuration = 60;
  * the RP signature needed for IDKit. The server still validates configuration.
  */
 export async function POST(request: NextRequest): Promise<Response> {
+  // Sin autenticación por diseño, así que el freno es por IP: cada llamada
+  // firma un RP context y consume cuota del backend de World ID.
+  const limit = checkRateLimit({
+    name: 'auth-worldid-rp-context',
+    limit: 20,
+    windowMs: 60_000,
+    identifiers: [getClientIp(request)],
+  });
+  if (!limit.allowed) return rateLimitResponse(limit);
+
   const rpId = getWorldIdRpId();
   const signingKey = getWorldIdSigningKey();
 

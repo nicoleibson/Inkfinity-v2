@@ -75,6 +75,31 @@ rechaza cualquier prueba cuyo `environment` no coincida.
 El nullifier se normaliza a hex minúsculas (`0x` + 64 hex) para que variantes de
 mayúsculas no permitan vincular la misma persona dos veces.
 
+### Retención de `worldId_used_proofs`
+
+Los hashes anti-replay solo sirven mientras la prueba puede reenviarse, así que
+no se guardan indefinidamente. Un cron diario de Vercel (`vercel.json`) llama a
+`GET /api/admin/worldid-proofs/purge`, que:
+
+- borra los hashes con más de `WORLD_ID_PROOF_RETENTION_DAYS` días (default `90`);
+- lo hace en lotes de 100 y con un máximo de 5000 por corrida;
+- devuelve `{ scanned, purged, skipped, remainingCandidates, truncated }`.
+
+Entradas sin fecha reconocible se dejan intactas: borrar un hash vivo
+reabriría el ataque de replay. Para simular o lanzar una purga manual:
+
+```bash
+curl -X POST https://inkfinity-ten.vercel.app/api/admin/worldid-proofs/purge \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun":true}'
+```
+
+Un administrador con sesión también puede llamarlo (`Authorization: Bearer
+<ID token>`); el servidor revalida su rol en RTDB. `CRON_SECRET` debe existir en
+Vercel o el cron recibe 401.
+
+
 ## Seguridad
 
 - **Replay protection**: cada payload de IDKit se hashea (SHA-256) y se registra

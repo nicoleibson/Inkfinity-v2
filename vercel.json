@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/worldid-proofs/purge",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

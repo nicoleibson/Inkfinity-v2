@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from 'firebase-admin/database';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { requireAuth } from '@/lib/server/auth';
+import { checkRateLimit, rateLimitResponse } from '@/lib/server/rate-limit';
 import { linkWorldIdToUser, verifyWorldIdProof } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
@@ -22,6 +23,17 @@ export async function POST(request: NextRequest): Promise<Response> {
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+
+  // Verificar un proof cuesta una llamada al verificador de World y escribe en
+  // RTDB; el límite se aplica antes de leer el cuerpo para no gastar trabajo
+  // en peticiones que ya sabemos que sobran.
+  const limit = checkRateLimit({
+    name: 'worldid-verify',
+    limit: 10,
+    windowMs: 60_000,
+    identifiers: [auth.user.uid],
+  });
+  if (!limit.allowed) return rateLimitResponse(limit);
 
   let idkitResponse: unknown;
   try {

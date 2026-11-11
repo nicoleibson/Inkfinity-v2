@@ -16,6 +16,8 @@ Ver también `.env.example` y `docs/WORLD_ID.md`.
 | `RP_SIGNING_KEY` | server | World Developer Portal → App → RP | **Secreta.** Clave de firma del RP: 64 hex (66 con `0x`). Nunca con `NEXT_PUBLIC_`. Si se filtra, rotarla en el portal. |
 | `WORLD_ID_RP_ID` | server | World Developer Portal | `rp_...`. Alternativa legacy: `WORLD_RP_ID`. |
 | `WORLD_ID_ENVIRONMENT` | server | Config | `production` (default) o `staging` (simulador, solo pruebas). |
+| `WORLD_ID_PROOF_RETENTION_DAYS` | server | Config | Días que se conservan los hashes anti-replay de `worldId_used_proofs`. Default: `90`. |
+| `CRON_SECRET` | server | Config | Secreto que Vercel envía como `Authorization: Bearer` al cron diario de purga. Sin él, el cron recibe 401. |
 | `PLATFORM_WALLET_PRIVATE_KEY` | server | Wallet de tesorería | **Secreta.** Firma los payouts de referidos on-chain (WLD en World Chain). Sin ella el endpoint `/api/referral-payouts/on-chain` responde 503. |
 | `PLATFORM_WALLET_ADDRESS` | server | Wallet de tesorería | Fallback server-side de la dirección pública. |
 | `RPC_WORLDCHAIN_URL` | server | Alchemy/Infura | **Nombre canónico.** RPC mainnet con API key, usado por verificación de pagos userOp, NFT y payouts on-chain (`src/lib/worldchain-rpc.ts`). |

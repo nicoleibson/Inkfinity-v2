@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/server/rate-limit';
 import { verifyWorldIdProof, normalizeNullifier } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
@@ -21,6 +22,16 @@ export const maxDuration = 60;
  *    concurrent requests for the same World ID only one wins.
  */
 export async function POST(request: NextRequest): Promise<Response> {
+  // Ruta sin sesión que crea usuarios de Firebase Auth: el límite por IP frena
+  // el alta masiva y el gasto de cuota de verificación.
+  const limit = checkRateLimit({
+    name: 'auth-worldid-signup',
+    limit: 10,
+    windowMs: 60_000,
+    identifiers: [getClientIp(request)],
+  });
+  if (!limit.allowed) return rateLimitResponse(limit);
+
   let idkitResponse: unknown;
   let email: string | null = null;
   let role = 'Client';

@@ -55,6 +55,8 @@ Configúralas en **Vercel → Project → Settings → Environment Variables**, 
 | `WORLD_ID_RP_ID` | server | `rp_...` del Developer Portal (legacy: `WORLD_RP_ID`) |
 | `RP_SIGNING_KEY` | server | clave de firma del RP: 64 hex (66 con `0x`). Secreta |
 | `WORLD_ID_ENVIRONMENT` | server | `production` (default) o `staging` (solo pruebas) |
+| `WORLD_ID_PROOF_RETENTION_DAYS` | server | días de retención de hashes anti-replay (default `90`) |
+| `CRON_SECRET` | server | secreto que Vercel envía al cron diario de purga; sin él responde 401 |
 | `PLATFORM_WALLET_PRIVATE_KEY` | server | clave privada de la wallet de tesorería para payouts de referidos on-chain |
 | `WORLDCHAIN_RPC_URL` | server | RPC para los payouts on-chain (fallback: RPC público de Alchemy) |
 
@@ -106,7 +108,7 @@ vercel env pull .env.local   # opcional: trae las vars del proyecto
 vercel --prod
 ```
 
-> **No** añadir un `vercel.json` con `buildCommand` / `installCommand` / `cleanUrls` a mano: sobreescribe la configuración del proyecto y puede romper el deploy. Si el build se queda sin memoria, súbelo en *Project → Settings → Environment Variables* con `NODE_OPTIONS=--max-old-space-size=4096`.
+> **No** añadir un `vercel.json` con `buildCommand` / `installCommand` / `cleanUrls` a mano: sobreescribe la configuración del proyecto y puede romper el deploy. El `vercel.json` del repo solo declara el cron diario de purga de `worldId_used_proofs` (`0 4 * * *`); si el build se queda sin memoria, súbelo en *Project → Settings → Environment Variables* con `NODE_OPTIONS=--max-old-space-size=4096`.
 
 **Reglas de Firebase (independientes del hosting):**
 

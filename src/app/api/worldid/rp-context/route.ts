@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signRequest } from '@worldcoin/idkit-core/signing';
 import { requireAuth } from '@/lib/server/auth';
+import { checkRateLimit, rateLimitResponse } from '@/lib/server/rate-limit';
 import {
   WORLD_ID_ACTION,
   getWorldIdEnvironment,
@@ -24,6 +25,14 @@ export async function POST(request: NextRequest): Promise<Response> {
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+
+  const limit = checkRateLimit({
+    name: 'worldid-rp-context',
+    limit: 20,
+    windowMs: 60_000,
+    identifiers: [auth.user.uid],
+  });
+  if (!limit.allowed) return rateLimitResponse(limit);
 
   const rpId = getWorldIdRpId();
   const signingKey = getWorldIdSigningKey();

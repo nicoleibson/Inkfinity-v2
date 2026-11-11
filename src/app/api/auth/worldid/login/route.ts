@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from 'firebase-admin/database';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/server/rate-limit';
 import { verifyWorldIdProof, normalizeNullifier } from '@/lib/server/worldid';
 
 export const runtime = 'nodejs';
@@ -16,6 +17,16 @@ export const maxDuration = 60;
  * issue a custom token for the linked uid.
  */
 export async function POST(request: NextRequest): Promise<Response> {
+  // Ruta sin sesión: el límite va por IP para que un cliente no pueda probar
+  // proofs en bucle contra el verificador.
+  const limit = checkRateLimit({
+    name: 'auth-worldid-login',
+    limit: 10,
+    windowMs: 60_000,
+    identifiers: [getClientIp(request)],
+  });
+  if (!limit.allowed) return rateLimitResponse(limit);
+
   let idkitResponse: unknown;
   try {
     const body = (await request.json()) as { idkitResponse?: unknown };
