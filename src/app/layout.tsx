@@ -6,7 +6,6 @@ import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import "./globals.css";
 import { DynamicTheme } from "@/components/layout/dynamic-theme";
-import { ChatbotWidget } from "@/components/layout/chatbot-widget";
 import { JsonLd } from "@/components/seo/json-ld";
 
 const lora = Lora({
@@ -103,7 +102,6 @@ export default function RootLayout({
             </main>
             <Footer />
           </div>
-          <ChatbotWidget />
           <Toaster />
         </AppProviders>
       </body>
